@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SDNODES VERSION: 1.12
+# SDNODES VERSION: 1.14
 # 
 # Purpose: To display cluster wide information about all nodes within.
 # 
@@ -845,7 +845,8 @@ def cli_main() -> int:
     #print(f"Elapsed Time: {hours} hours, {minutes} minutes, and {seconds} seconds")
     # print("⚠️  (warning sign)\n❗  (heavy exclamation)\n🚧  (construction)\n🔶  (large orange diamond)\n[!] (ASCII warning)\n(!) (ASCII warning)")
 
-    
+
+
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, _handle_sigterm)
 
