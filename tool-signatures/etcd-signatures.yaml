@@ -1,0 +1,791 @@
+################################################################################
+# Formal mapping table: current etcd_analysis.py → YAML contract
+# 
+# ------------------------------+---------------------------------------------------------------------------------+---------------------------------------------------------------+----------------------
+# Current Python area           |   Current symbol / logic                                                        |   YAML v2 destination                                         | Notes
+# ------------------------------+---------------------------------------------------------------------------------+---------------------------------------------------------------+----------------------
+# Raw etcd log signatures       | EVENT_PATTERNS                                                                  | signatures.events[].patterns	                                | direct migration
+# Event kind name               | tuple first element in EVENT_PATTERNS                                           | signatures.events[].event_type                                | direct migration
+# Base severity                 | BASE_SEVERITY                                                                   | signatures.events[].default_severity                          | direct migration
+# Journal signal regexes        | _JOURNAL_SIGNAL_PATTERNS                                                        | journal_signatures.events[]                                   | direct migration
+# Storm thresholds              | rules map inside detect_storms()                                                | storm_rules.rules[]                                           | direct migration
+# Family classification         | _classify_incident_families() sets                                              | families.event_type_to_family                                 | direct migration
+# Duration threshold buckets    | duration_aware_severity() numeric literals                                      | duration_policies.policies[].thresholds_ms                    | migrate values, keep math in Python
+# Ratio boost thresholds        | duration_aware_severity() ratio literals                                        | duration_policies.ratio_boost                                 | move constants only
+# Keyspace-sensitive thresholds | special /registry/health branch                                                 | duration_policies.keyspace_overrides[]                        | keep branch logic in Python
+# Journal family bump map       | JOURNAL_TO_FAMILY inside _classify_incident_families()                          | families.event_type_to_family                                 | cleaner unified mapping
+# Bundle source discovery       | scan_bundle(), find_ucp_kv_log(), find_journalctl_daemon_log() path assumptions | sources.bundle.roles.*                                        | Python still performs file lookup
+# Node eligibility              | scan_bundle() (has_status or has_log)                                           | sources.bundle.analyzable_node_policy                         | move policy, keep enforcement in Python
+# Narrative category hints      | ad hoc in window_narrative()                                                    | narrative.categories + signatures.events[].narrative_tags     | Python still assembles prose
+# Higher-order interpretation   | currently mostly implicit in prose                                              | heuristics.rules[]                                            | new capability, additive
+# Output schema stamps          | hard-coded JSON schema strings                                                  | outputs.schemas.*                                             | optional but useful
+# Context defaults              | ad hoc / limited                                                                defaults.context                                                | mostly future-facing unless you add richer evidence excerpts
+#
+################################################################################
+
+
+
+
+schema_version: etcd-signatures-v2
+version: 1
+name: etcd-signatures
+description: >
+  Detection contract for hybrid etcd incident analysis.
+
+  YAML defines:
+    - source discovery policy
+    - raw event signatures
+    - supplemental journal signatures
+    - duration threshold policies
+    - storm/burst rules
+    - family classification rules
+    - higher-order heuristic findings
+    - narrative metadata
+
+  Python remains responsible for:
+    - timestamp parsing and normalization
+    - duration extraction and unit conversion
+    - etcd-status structured parsing
+    - incident window clustering
+    - cluster synthesis and topology reasoning
+    - severity rollup math
+    - report / CSV / JSON rendering
+
+contract_notes:
+  design_intent:
+    - "YAML defines what to look for."
+    - "Python decides what it means."
+    - "Structured parsers remain code, not config."
+  compatibility_goal:
+    - "Initial bundled config should preserve current etcd_analysis.py behavior as closely as practical."
+
+###############################################################################
+# Validation / lint expectations
+###############################################################################
+validation:
+  severity_enum: [critical, high, medium, low, info]
+  source_role_enum:
+    - ucp_kv_log
+    - journalctl_daemon
+    - etcd_status
+    - dsinfo_txt
+
+  required_top_level_sections:
+    - defaults
+    - sources
+    - outputs
+    - duration_policies
+    - signatures
+    - journal_signatures
+    - storm_rules
+    - families
+    - heuristics
+    - narrative
+
+  uniqueness:
+    signature_ids_must_be_unique: true
+    journal_signature_ids_must_be_unique: true
+    event_types_should_be_unique_within_section: true
+    storm_rule_ids_must_be_unique: true
+    heuristic_ids_must_be_unique: true
+
+  references:
+    duration_policy_must_exist_if_referenced: true
+    heuristic_event_types_must_exist: true
+    family_event_types_must_exist: true
+    source_roles_must_be_valid: true
+
+  regex:
+    compile_patterns_at_load: true
+    invalid_pattern_is_error: true
+
+###############################################################################
+# Defaults
+###############################################################################
+defaults:
+  severities: [critical, high, medium, low, info]
+
+  context:
+    pre: 1
+    post: 2
+    max_line_length: 600
+    trim_whitespace: true
+    store_context_in_events_json: true
+    store_context_in_findings: false
+
+  excerpt:
+    max_chars: 260
+
+  ids:
+    event:
+      sequential_prefix: "evt_"
+      sequential_width: 6
+    incident:
+      sequential_prefix: "inc_"
+      sequential_width: 4
+
+###############################################################################
+# Source discovery
+###############################################################################
+sources:
+  description: >
+    Discovery policy for bundle-mode evidence collection.
+
+  bundle:
+    host_layout:
+      dsinfo_dir_name: "dsinfo"
+
+    roles:
+      etcd_status:
+        preferred_paths:
+          - "dsinfo/etcd-status.txt"
+
+      dsinfo_txt:
+        preferred_paths:
+          - "dsinfo/dsinfo.txt"
+
+      ucp_kv_log:
+        preferred_globs:
+          - "dsinfo/logs/**/ucp-kv.log"
+        selection_policy: newest_by_mtime
+
+      journalctl_daemon:
+        preferred_paths:
+          - "dsinfo/journalctl_daemon.log"
+        fallback_globs:
+          - "dsinfo/logs/**/journalctl_daemon.log"
+        selection_policy: newest_by_mtime
+
+    analyzable_node_policy:
+      require_one_of:
+        - etcd_status
+        - ucp_kv_log
+      optional:
+        - journalctl_daemon
+        - dsinfo_txt
+      notes:
+        - "journalctl_daemon alone is supplemental and does not make a node analyzable."
+
+###############################################################################
+# Output schema stamps
+###############################################################################
+outputs:
+  schemas:
+    events_csv: "etcd-events-csv-v1"
+    incidents_json: "etcd-incidents-json-v1"
+    bundle_json: "etcd-bundle-json-v1"
+    cluster_synthesis: "etcd-cluster-synthesis-v1"
+
+###############################################################################
+# Duration-aware severity policies
+###############################################################################
+duration_policies:
+  description: >
+    Numeric thresholds consumed by Python severity logic after duration extraction.
+
+  ratio_boost:
+    medium_gte: 3
+    high_gte: 10
+    critical_gte: 50
+
+  keyspace_overrides:
+    - key_prefix: "/registry/health"
+      thresholds_ms:
+        low: 100
+        medium: 150
+        high: 250
+        critical: 500
+
+  policies:
+    slow_fdatasync:
+      thresholds_ms:
+        low: 200
+        medium: 500
+        high: 2000
+        critical: 5000
+
+    raft_heartbeat_miss:
+      thresholds_ms:
+        low: 50
+        medium: 100
+        high: 250
+        critical: 1000
+
+    apply_took_too_long:
+      thresholds_ms:
+        low: 100
+        medium: 300
+        high: 750
+        critical: 1500
+
+    linearizable_read_slow:
+      thresholds_ms:
+        low: 100
+        medium: 300
+        high: 750
+        critical: 1500
+
+    raft_read_agreement_slow:
+      thresholds_ms:
+        low: 100
+        medium: 300
+        high: 750
+        critical: 1500
+
+    rpc_request_stats:
+      thresholds_ms:
+        low: 100
+        medium: 300
+        high: 750
+        critical: 1500
+
+###############################################################################
+# Primary etcd/server signatures (ucp-kv.log)
+###############################################################################
+signatures:
+  description: >
+    Raw event signatures matched against ucp-kv.log.
+
+  events:
+    - id: slow_fdatasync
+      event_type: slow_fdatasync
+      group: storage_timing
+      default_severity: high
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - '"msg"\s*:\s*"slow fdatasync"'
+        - 'slow fdatasync'
+      narrative_tags: [storage_timing, possible_disk_stall]
+      duration_policy: slow_fdatasync
+      storm_eligible: true
+
+    - id: readindex_retry
+      event_type: readindex_retry
+      group: read_path
+      default_severity: medium
+      confidence_weight: 0.90
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'waiting for ReadIndex response took too long'
+      narrative_tags: [read_path_pressure, quorum_read_delay]
+      storm_eligible: true
+
+    - id: linearizable_read_slow
+      event_type: linearizable_read_slow
+      group: read_path
+      default_severity: medium
+      confidence_weight: 0.90
+      source_roles: [ucp_kv_log]
+      patterns:
+        - '"msg"\s*:\s*"trace\[.*\]\s+linearizableReadLoop"'
+        - '\blinearizableReadLoop\b'
+      narrative_tags: [read_path_pressure]
+      duration_policy: linearizable_read_slow
+      storm_eligible: true
+
+    - id: raft_read_agreement_slow
+      event_type: raft_read_agreement_slow
+      group: read_path
+      default_severity: medium
+      confidence_weight: 0.90
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'agreement among raft nodes before linearized reading'
+      narrative_tags: [quorum_read_delay]
+      duration_policy: raft_read_agreement_slow
+
+    - id: raft_heartbeat_miss
+      event_type: raft_heartbeat_miss
+      group: raft_timing
+      default_severity: high
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'leader failed to send out heartbeat on time'
+      narrative_tags: [raft_timing, leader_delay]
+      duration_policy: raft_heartbeat_miss
+      storm_eligible: true
+
+    - id: apply_took_too_long
+      event_type: apply_took_too_long
+      group: apply_path
+      default_severity: medium
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'apply request took too long'
+      narrative_tags: [apply_path_pressure]
+      duration_policy: apply_took_too_long
+      storm_eligible: true
+
+    - id: raft_process_slow
+      event_type: raft_process_slow
+      group: apply_path_detail
+      default_severity: low
+      confidence_weight: 0.80
+      source_roles: [ucp_kv_log]
+      patterns:
+        - "'process raft request'\\s*\\(duration:"
+      narrative_tags: [apply_path_detail]
+
+    - id: raft_compare_slow
+      event_type: raft_compare_slow
+      group: apply_path_detail
+      default_severity: low
+      confidence_weight: 0.75
+      source_roles: [ucp_kv_log]
+      patterns:
+        - "'compare'\\s*\\(duration:"
+      narrative_tags: [apply_path_detail]
+
+    - id: inmemory_index_scan_slow
+      event_type: inmemory_index_scan_slow
+      group: apply_path_detail
+      default_severity: low
+      confidence_weight: 0.75
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'range keys from in-memory index tree'
+      narrative_tags: [index_scan_pressure]
+
+    - id: applied_index_lag
+      event_type: applied_index_lag
+      group: correctness_risk
+      default_severity: high
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'appliedIndex\s+is\s+now\s+lower\s+than\s+readState\.Index'
+      narrative_tags: [correctness_risk, follower_or_apply_lag]
+      storm_eligible: true
+
+    - id: context_deadline
+      event_type: context_deadline
+      group: client_symptom
+      default_severity: medium
+      confidence_weight: 0.90
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'context deadline exceeded'
+      narrative_tags: [client_visible_timeout]
+      storm_eligible: true
+
+    - id: context_canceled
+      event_type: context_canceled
+      group: client_symptom
+      default_severity: medium
+      confidence_weight: 0.70
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'context canceled'
+      narrative_tags: [client_abort_or_timeout_followup]
+
+    - id: grpc_transport_closing
+      event_type: grpc_transport_closing
+      group: transport
+      default_severity: high
+      confidence_weight: 0.80
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'transport is closing'
+      narrative_tags: [transport_churn]
+
+    - id: peer_probe_unhealthy
+      event_type: peer_probe_unhealthy
+      group: peer_connectivity
+      default_severity: critical
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'prober detected unhealthy status'
+      narrative_tags: [peer_unhealthy, quorum_risk]
+
+    - id: peer_connect_refused
+      event_type: peer_connect_refused
+      group: peer_connectivity
+      default_severity: critical
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'connect:\s*connection refused'
+      narrative_tags: [peer_unreachable, quorum_risk]
+
+    - id: health_no_leader
+      event_type: health_no_leader
+      group: leadership
+      default_severity: critical
+      confidence_weight: 0.98
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'serving\s+/health\s+false;\s+no leader'
+        - 'RAFT NO LEADER'
+        - '/health error'
+      narrative_tags: [no_leader, availability_impact]
+
+    - id: health_registry_read
+      event_type: health_registry_read
+      group: control_plane
+      default_severity: low
+      confidence_weight: 0.85
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'key:"/registry/health"'
+      narrative_tags: [control_plane_path, keyspace_sensitive]
+      keyspace_sensitive: true
+
+    - id: raft_election
+      event_type: raft_election
+      group: leadership
+      default_severity: critical
+      confidence_weight: 0.95
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'starting a new election'
+        - 'became pre-candidate'
+        - 'elected leader'
+        - 'became follower'
+        - 'higher term'
+      narrative_tags: [election_activity, leadership_instability]
+
+    - id: client_conn_rejected
+      event_type: client_conn_rejected
+      group: client_symptom
+      default_severity: high
+      confidence_weight: 0.85
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'rejected connection on client endpoint'
+      narrative_tags: [client_visible_connectivity]
+
+    - id: client_conn_reset
+      event_type: client_conn_reset
+      group: client_symptom
+      default_severity: low
+      confidence_weight: 0.65
+      source_roles: [ucp_kv_log]
+      patterns:
+        - 'connection reset by peer'
+        - '\bEOF\b'
+      narrative_tags: [client_connection_churn]
+
+    - id: rpc_request_stats
+      event_type: rpc_request_stats
+      group: general_latency
+      default_severity: medium
+      confidence_weight: 0.80
+      source_roles: [ucp_kv_log]
+      patterns:
+        - '"msg"\s*:\s*"request stats"'
+        - '\brequest stats\b'
+      narrative_tags: [generic_request_latency]
+      duration_policy: rpc_request_stats
+
+###############################################################################
+# Supplemental journal signatures
+###############################################################################
+journal_signatures:
+  description: >
+    Supplemental evidence matched against journalctl_daemon.log.
+
+  events:
+    - id: swarm_no_leader
+      event_type: swarm_no_leader
+      group: journal_leadership
+      default_severity: critical
+      confidence_weight: 0.85
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'swarm does not have a leader'
+
+    - id: journal_deadline_exceeded
+      event_type: deadline_exceeded
+      group: journal_network
+      default_severity: high
+      confidence_weight: 0.80
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'DeadlineExceeded'
+        - 'context deadline exceeded'
+
+    - id: no_route_to_host
+      event_type: no_route_to_host
+      group: journal_network
+      default_severity: high
+      confidence_weight: 0.90
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'no route to host'
+
+    - id: connection_refused
+      event_type: connection_refused
+      group: journal_network
+      default_severity: high
+      confidence_weight: 0.90
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'connection refused'
+
+    - id: dns_no_such_host
+      event_type: dns_no_such_host
+      group: journal_network
+      default_severity: medium
+      confidence_weight: 0.75
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'lookup .* no such host'
+
+    - id: memberlist_refuting
+      event_type: memberlist_refuting
+      group: journal_membership
+      default_severity: medium
+      confidence_weight: 0.75
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'memberlist:.*Refuting'
+
+    - id: networkdb_connectivity_issues
+      event_type: networkdb_connectivity_issues
+      group: journal_network
+      default_severity: medium
+      confidence_weight: 0.75
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'NetworkDB stats.*healthscore'
+
+    - id: agent_session_failed
+      event_type: agent_session_failed
+      group: journal_leadership
+      default_severity: high
+      confidence_weight: 0.80
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'agent: session failed'
+
+    - id: etcd_rpc_unavailable
+      event_type: etcd_rpc_unavailable
+      group: journal_etcd_client
+      default_severity: high
+      confidence_weight: 0.85
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'logger":"etcd-client"'
+        - '"logger"\s*:\s*"etcd-client"'
+
+    - id: journal_grpc_transport_closing
+      event_type: grpc_transport_closing
+      group: journal_transport
+      default_severity: medium
+      confidence_weight: 0.75
+      source_roles: [journalctl_daemon]
+      patterns:
+        - 'transport is closing'
+
+###############################################################################
+# Storm / burst rules
+###############################################################################
+storm_rules:
+  rules:
+    - id: storm_readindex_retry
+      event_type: readindex_retry
+      window_seconds: 30
+      count_gte: 5
+      synthetic_event_type: storm_readindex_retry
+      severity: high
+
+    - id: storm_apply_took_too_long
+      event_type: apply_took_too_long
+      window_seconds: 60
+      count_gte: 20
+      synthetic_event_type: storm_apply_took_too_long
+      severity: high
+
+    - id: storm_linearizable_read_slow
+      event_type: linearizable_read_slow
+      window_seconds: 60
+      count_gte: 20
+      synthetic_event_type: storm_linearizable_read_slow
+      severity: high
+
+    - id: storm_raft_heartbeat_miss
+      event_type: raft_heartbeat_miss
+      window_seconds: 30
+      count_gte: 3
+      synthetic_event_type: storm_raft_heartbeat_miss
+      severity: critical
+
+    - id: storm_slow_fdatasync
+      event_type: slow_fdatasync
+      window_seconds: 60
+      count_gte: 3
+      synthetic_event_type: storm_slow_fdatasync
+      severity: critical
+
+    - id: storm_context_deadline
+      event_type: context_deadline
+      window_seconds: 60
+      count_gte: 10
+      synthetic_event_type: storm_context_deadline
+      severity: high
+
+    - id: storm_applied_index_lag
+      event_type: applied_index_lag
+      window_seconds: 60
+      count_gte: 5
+      synthetic_event_type: storm_applied_index_lag
+      severity: critical
+
+###############################################################################
+# Family classification
+###############################################################################
+families:
+  event_type_to_family:
+    readindex_retry: read_path
+    linearizable_read_slow: read_path
+    raft_read_agreement_slow: read_path
+    health_registry_read: read_path
+
+    apply_took_too_long: apply_path
+    raft_process_slow: apply_path
+    raft_compare_slow: apply_path
+    inmemory_index_scan_slow: apply_path
+    applied_index_lag: apply_path
+
+    slow_fdatasync: storage_timing
+    raft_heartbeat_miss: storage_timing
+
+    context_deadline: client_network
+    context_canceled: client_network
+    client_conn_rejected: client_network
+    client_conn_reset: client_network
+    grpc_transport_closing: client_network
+    no_route_to_host: client_network
+    connection_refused: client_network
+    dns_no_such_host: client_network
+    networkdb_connectivity_issues: client_network
+    etcd_rpc_unavailable: client_network
+
+    raft_election: raft_election
+    health_no_leader: raft_election
+    peer_probe_unhealthy: raft_election
+    peer_connect_refused: raft_election
+    swarm_no_leader: raft_election
+    agent_session_failed: raft_election
+
+###############################################################################
+# Higher-order heuristic findings
+###############################################################################
+heuristics:
+  rules:
+    - id: likely_storage_stall_cascade
+      title: "Likely storage timing cascade"
+      enabled: true
+      severity: high
+      confidence_weight: 0.90
+      window_seconds: 300
+      requires:
+        all_of:
+          - slow_fdatasync
+          - raft_heartbeat_miss
+        any_of:
+          - apply_took_too_long
+          - readindex_retry
+          - linearizable_read_slow
+      outputs:
+        tags: [storage_timing, cascade]
+        likely_causes:
+          - "WAL/fsync latency or storage stall"
+          - "node-level pause affecting raft timing and apply latency"
+
+    - id: likely_leader_overload
+      title: "Likely leader overload / read-path pressure"
+      enabled: true
+      severity: high
+      confidence_weight: 0.80
+      window_seconds: 300
+      requires:
+        all_of:
+          - readindex_retry
+          - linearizable_read_slow
+        none_of:
+          - slow_fdatasync
+      supports:
+        - raft_read_agreement_slow
+        - rpc_request_stats
+      outputs:
+        tags: [leader_overload, read_path_pressure]
+        likely_causes:
+          - "leader responsiveness degraded under load"
+          - "hot read path or quorum read coordination pressure"
+
+    - id: likely_peer_connectivity_failure
+      title: "Likely peer connectivity failure"
+      enabled: true
+      severity: critical
+      confidence_weight: 0.92
+      window_seconds: 600
+      requires:
+        any_of:
+          - peer_connect_refused
+          - peer_probe_unhealthy
+      supports:
+        - raft_election
+        - health_no_leader
+        - connection_refused
+        - no_route_to_host
+      outputs:
+        tags: [peer_connectivity, quorum_risk]
+        likely_causes:
+          - "member-to-member connectivity failure"
+          - "peer listener unavailable or node down"
+          - "network path/filtering issue"
+
+    - id: likely_client_visible_outage
+      title: "Client-visible etcd degradation"
+      enabled: true
+      severity: high
+      confidence_weight: 0.85
+      window_seconds: 300
+      thresholds:
+        - event_type: context_deadline
+          count_gte: 5
+      supports:
+        - client_conn_rejected
+        - grpc_transport_closing
+        - health_no_leader
+      outputs:
+        tags: [client_visible, blast_radius]
+        likely_causes:
+          - "etcd degradation is surfacing to callers"
+          - "timeouts or connection failures are affecting clients"
+
+###############################################################################
+# Narrative metadata
+###############################################################################
+narrative:
+  categories:
+    read_path:
+      label: "read-path pressure"
+    apply_path:
+      label: "apply-path pressure"
+    storage_timing:
+      label: "storage timing degradation"
+    raft_election:
+      label: "leadership instability"
+    client_network:
+      label: "client/network symptom"
+    control_plane:
+      label: "control-plane path impact"
+    correctness_risk:
+      label: "correctness risk"
+
+###############################################################################
+# Reserved future expansion
+###############################################################################
+reserved:
+  future_families:
+    - watch_path
+    - storage_quota_pressure
+    - data_integrity
+    - maintenance_side_effect
+    - host_overload
