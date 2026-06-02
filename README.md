@@ -102,6 +102,8 @@ options:
 
 ---
 
+---
+
 # PATTERNS_SEARCH.PY
 
 Searches support bundles for known patterns and produces summarized reports.
@@ -325,6 +327,8 @@ options:
   --mapping          Write sanitize_mapping.json
 ```
 </details>
+
+---
 
 ---
 
@@ -1261,6 +1265,8 @@ reserved:
 
 ---
 
+---
+
 # SOS_TRIAGE
 
 `sos_triage` evaluates sosreports for Mirantis-related product issues and produces a structured, deterministic RCA view into events.
@@ -1490,3 +1496,7 @@ To keep the extracted sosreport, remove this argument:
 ```bash
 --cleanup-extracted
 ```
+
+---
+
+---
