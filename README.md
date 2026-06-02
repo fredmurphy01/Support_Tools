@@ -305,7 +305,7 @@ options:
   --outdir OUTDIR    Output directory for artifacts and sanitized bundle
   --mapping          Write sanitize_mapping.json
 ```
-</detail>
+</details>
 
 ### Example-1: Sanitize the bundle "tickets/12345678/docker-support-20260303-19_51_11", create additional json mapping file, and place sanitized bundle into "tickets/12345678" which will be called "docker-support-20260303-19_51_11-sanitized"
 ```bash
@@ -337,66 +337,103 @@ For example:
 <detail>
 <summary>Conceptual Model</summary>
 
-### A) Detect bursts/storms (many events of same kind in a small window) and surface them as explicit "storm" events.
-### B) Collapse correlated events into a concise incident narrative per window.
-###
-### C) This groups into an >>Incident<< a contiguous period of abnormal etcd behaviour -
-###     A time window where the system is >>meaningfully degraded<< not just noisy.
-###
-### D) An Incident Window is a group of detected etcd events that occur close enough in
-###     time to be considered part of the same underlying degradation episode.
-###     Meaning, it is essentially a gap-based clustering of events.
-###     If the time gap between consecutive events exceeds a threshold then start a new incident otherwise its the same incident.
-###     So, essentially, an incident is fundamentally a time-bounded degradation episode.
-###     Each Incident answers:
-###        "Something was wrong during this period"
-###        "Multiple symptoms appeared together"
-###        "This was not just one-off noise"
-###
-###    That's why an Incident Window includes:
-###        time range
-###        severity rollup
-###        event counts
-###        storm detection
-###        a narrative summary
-###
-###    What an Incident is not
-####    ❌ Not a root cause
-####    ❌ Not a single failure
-####    ❌ Not guaranteed to be unique (you can have many incidents with similar patterns)
-###    An Incident is observational, not explanatory. 
-### 
-### 
-### This etcd_analysis makes use of a signature file to allow for expansion.
-### The file is called "etcd-signatures.yaml" located in the tool-signatures directory by default.
-####   By having a signature file we can add more content to the overall analysis rather than making code changes.
-### 
+```text
+A) Detect bursts/storms (many events of same kind in a small window) and surface them as explicit "storm" events.
+
+B) Collapse correlated events into a concise incident narrative per window.
+
+C) This groups into an >>Incident<< a contiguous period of abnormal etcd behaviour -
+    A time window where the system is >>meaningfully degraded<< not just noisy.
+
+D) An Incident Window is a group of detected etcd events that occur close enough in
+    time to be considered part of the same underlying degradation episode.
+    Meaning, it is essentially a gap-based clustering of events.
+    If the time gap between consecutive events exceeds a threshold then start a new incident otherwise its the same incident.
+    So, essentially, an incident is fundamentally a time-bounded degradation episode.
+    Each Incident answers:
+        "Something was wrong during this period"
+        "Multiple symptoms appeared together"
+        "This was not just one-off noise"
+
+    That's why an Incident Window includes:
+        time range
+        severity rollup
+        event counts
+        storm detection
+        a narrative summary
+
+    What an Incident is not
+        ❌ Not a root cause
+        ❌ Not a single failure
+        ❌ Not guaranteed to be unique (you can have many incidents with similar patterns)
+    An Incident is observational, not explanatory. 
+
+This etcd_analysis makes use of a signature file to allow for expansion.
+The file is called "etcd-signatures.yaml" located in the tool-signatures directory by default.
+    By having a signature file we can add more content to the overall analysis rather than making code changes.
+
 ## Generated Artifacts
-###  1 - etcd_analysis_report.md
-###  2 - etcd_analysis.json
-###  3 - A csv file for each leader found, e.g.
-####    3a - managerhost01_ucp-kv.log.events.csv
-### 
-###
-### - What is PYTHONPATH doing?
-####   - Telling Python to treat the tools/ directory as a top-level module search path.
-####   - Without this Python would not know where to find the "tools/sos_triage"
-####   - We are saying here: The package root lives inside /tools
-### 
-### - What does the -m mean?
-####   - This is very important and tells python to run a module as a script, which effectively is this entire package sos_triage.
-</detail>
+    1 - etcd_analysis_report.md
+    2 - etcd_analysis.json
+    3 - A csv file for each leader found, e.g.
+        3a - managerhost01_ucp-kv.log.events.csv
 
 
+- What is PYTHONPATH doing?
+    - Telling Python to treat the tools/ directory as a top-level module search path.
+    - Without this Python would not know where to find the "tools/sos_triage"
+    - We are saying here: The package root lives inside /tools
 
-## Quick Start
+    - What does the -m mean?
+        - This is very important and tells python to run a module as a script, which effectively is this entire package sos_triage.
+```
+</details>
 
+<details>
+<summary>ETCD_ANALYZE Examples</summary>
+
+### Example-1: Analyze bundle using typical etcd-signatures.yaml file with outputs going to tickets/12345678, which happens to be where the support bundle is located
 ```bash
 PYTHONPATH=tools python3 -m etcd_analysis analyze \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
     --config tools/tool-signatures/etcd-signatures.yaml \
-    --output-dir tickets/12345678
+    --output-dir tickets/123456787
 ```
+
+### Example-2: Same as Example 1 but with a specific date (YYYY-MM-DD) and a +/- of two (2) days to analyze
+```bash
+PYTHONPATH=tools python3 -m etcd_analysis analyze \
+    --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
+    --config tools/tool-signatures/etcd-signatures.yaml \
+    --output-dir tickets/123456787 \
+    --date 2026-06-01 \
+    --days 2
+```
+
+### Example-3: Interactive mode to query individual leader nodes for individual analysis (Useful to query individual leaders and their data)
+```bash
+PYTHONPATH=tools python3 -m etcd_analysis analyze \
+    --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
+    --config tools/tool-signatures/etcd-signatures.yaml \
+    --output-dir tickets/123456787 \
+    --interactive
+```
+
+### Example-4: Same as Example 1 but with a specific date (YYYY-MM-DD) and a +/- of two (2) days to analyze looking for a specific time and a timeframe around that time.
+####               --time: Filter events to a point-in-time window centered on the given minute (format: YYYY-MM-DDThh:mm). Example: --time=2026-01-28T06:20
+####               --time-window Time window half-width in hours when used with --time. The effective range is ±hours around --time. 0 means only that minute.
+```bash
+PYTHONPATH=tools python3 -m etcd_analysis analyze \
+    --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
+    --config tools/tool-signatures/etcd-signatures.yaml \
+    --output-dir tickets/123456787 \
+    --date 2026-06-01 \
+    --days 2 \
+    --time=2026-01-28T06:20 \
+    --time-window 10
+```
+</details>
+
 
 ---
 
