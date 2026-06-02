@@ -18,6 +18,8 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 ---
 
+---
+
 # SDNODES.PY
 
 Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
@@ -449,7 +451,7 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 </details>
 
 
-## ETCD Signatures
+## ETCD Signature File Content & Example
 
 `etcd_analysis` uses a YAML signature file to define detectable ETCD patterns and interpretation rules.
 
