@@ -32,7 +32,7 @@ python3 tools/sdnodes.py \
 ```
 
 ## Common Examples
-
+<details>
 
 ### Example-1: Basic output (default is pretty)
 ```bash
@@ -57,9 +57,10 @@ python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-1
 ```bash
 python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --accountname CORP-ABC --ticketnumber 12345678
 ```
+</details>
 
 <details>
-<summary>Full Command Help</summary>
+<summary>SDNODES Command Help</summary>
 
 ```text
 python3 tools/sdnodes.py -h
