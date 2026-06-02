@@ -147,8 +147,10 @@ python3 tools/patterns_search.py \
 ```
 </details>
 
+
 <details>
 <summary>PATTERNS_SEARCH Command Help</summary>
+
 ```text
 python3 tools/patterns_search.py -h
 usage: patterns_search.py [-h] -d DIRECTORY [--workers WORKERS] [-o OUTPUT] [--verbose] [--sdnodes-path SDNODES_PATH] [--patterns PATTERNS] [--date DATE] [--date-window-days DATE_WINDOW_DAYS]
