@@ -174,6 +174,7 @@ options:
 
 <details>
 <summary>PATTERNS_SEARCH default built-in</summary>
+
 ```text
 left gossip cluster
 "healthscore:[2-9] \(connectivity issues\)"
