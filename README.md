@@ -33,40 +33,33 @@ python3 tools/sdnodes.py \
 
 ## Common Examples
 
-### Basic Output
 
+### Example-1: Basic output (default is pretty)
 ```bash
-python3 tools/sdnodes.py \
-    --bundlepath tickets/12345678/docker-support-20260303-19_51_11
+python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11
 ```
 
-### Extended Hardware Information
-
+### Example-2: Extended output showing hardware (default is pretty)
 ```bash
-python3 tools/sdnodes.py \
-    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
-    --extended-output 1
+python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --extended-output 1
+```
+### Example-3: Output to console in csv style
+```bash
+python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --pretty 0
 ```
 
-### CSV Style Output
-
+### Example-4: Output to a file (Typically used for output in csv format so the file can be imported to spreadsheet. Default file = nodes_output.csv)
 ```bash
-python3 tools/sdnodes.py \
-    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
-    --pretty 0
+python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --pretty 0 --filesave 1 --outputfile outputdir/nodes_output_file.csv
 ```
 
-### Save Output To File
-
+### Example-5: Add columns Accountname & Ticket number to console output first two columns. Particularly useful if saving output file for later use.
 ```bash
-python3 tools/sdnodes.py \
-    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
-    --pretty 0 \
-    --filesave 1 \
-    --outputfile outputdir/nodes_output_file.csv
+python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --accountname CORP-ABC --ticketnumber 12345678
 ```
 
-## Full Command Help
+<details>
+<summary>Full Command Help</summary>
 
 ```text
 python3 tools/sdnodes.py -h
@@ -74,7 +67,28 @@ python3 tools/sdnodes.py -h
 usage: sdnodes.py [-h] [--pretty {0,1}] [--outputfile OUTPUTFILE]
                   [--filesave {0,1}]
                   ...
+
+options:
+  -h, --help            show this help message and exit
+  --pretty {0,1}        Set pretty level: 1=On (Default: no delimiters) 0=Off(Use a semicolon (;) as delimiter to enable import to spreadsheet)
+  --outputfile OUTPUTFILE
+                        Output file name (e.g., test.csv) -- (default = nodes_output.csv), can have a fully qualified path and filename for placement (directory MUST exist), else placed into pwd
+  --filesave {0,1}      Turn on saving to output file. Default=0 disabled. If enabled see --outputfile
+  --accountname ACCOUNTNAME
+                        Used to supply an Account Name if desired. Default = <undefined account name>. If using spaces in the Account Name be sure to enclose them in double quotes
+  --ticketnumber TICKETNUMBER
+                        Used if you want to show output associated specifically with a ticket number. Default = 00000000
+  --bundlepath BUNDLEPATH
+                        Path to where support bundle resides. Default = .
+  --bundledate BUNDLEDATE
+                        Simple date of support bundle. Format: dd/mm/YYYY Default=today
+  --bundlecreatedate BUNDLECREATEDATE
+                        Extended date of support bundle. Any string, preferred style: 2025-07-21T06:51:40.000Z Default = ''
+  --extended-output {0,1}
+                        Extended output level: 0=baseline (default) up to 4=most detailed, for now if >= 1 then displays hardware info
+
 ```
+<details>
 
 ---
 
@@ -225,10 +239,10 @@ The goal of `sos_triage` is to provide:
 `sos-signatures.yaml` is the primary configuration file for `sos_triage`.
 
 It defines:
-- Signatures (event detection)
-- Clustering rules
-- Heuristics
-- Timeline inclusion
+* Signatures (event detection)
+* Clustering rules
+* Heuristics
+* Timeline inclusion
 
 * What to scan inside an extracted sosreport
 * What is considered interesting
@@ -246,11 +260,11 @@ It defines:
 
 ## Profiles
 
-| Profile   | Name               | Intended Use                                                 |
-| --------- | ------------------ | ------------------------------------------------------------ |
-| Profile A | Quick Triage       | Most common support-engineer workflow; likely 80–90% of runs |
-| Profile B | Deep Analysis      | No guardrails or limits; used for deeper inspection          |
-| Profile C | One-shot Forensics | Used for unusual, complex, or weird bundles                  |
+| Profile   | Name               | Intended Use                                                           |
+| --------- | ------------------ | ---------------------------------------------------------------------- |
+| Profile A | Quick Triage       | DEFAULT - Most common support-engineer workflow; likely 80–90% of runs |
+| Profile B | Deep Analysis      | JOURNAL - No guardrails or limits; used for deeper inspection          |
+| Profile C | One-shot Forensics | FULL- Used for unusual, complex, or weird bundles                      |
 
 ---
 
@@ -364,10 +378,42 @@ In this case, it runs the `sos_triage` package as the executable entry point.
 
 ## Quick Start
 
+| Profile   | Name               | Intended Use                                                                 |
+| --------- | ------------------ | ---------------------------------------------------------------------------- |
+| Profile A | Quick Triage       | DEFAULT - Most common support-engineer workflow; likely 80–90% of runs       |
+```bash
+PYTHONPATH=tools python3 -m sos_triage analyze \
+    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
+    --max-bytes 8000000 \
+    --max-events 2000 \
+    --verbose \
+    --outdir tickets/12345678/sosanalysis \
+    --configs-dir tools/tool-signatures \
+    --cleanup-extracted
+```
+
+| Profile   | Name               | Intended Use                                                                 |
+| --------- | ------------------ | ---------------------------------------------------------------------------- |
+| Profile B | Deep Analysis      | --extract-mode JOURNAL - No guardrails or limits; used for deeper inspection |
 ```bash
 PYTHONPATH=tools python3 -m sos_triage analyze \
     tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
     --extract-mode journal \
+    --max-bytes 8000000 \
+    --max-events 2000 \
+    --verbose \
+    --outdir tickets/12345678/sosanalysis \
+    --configs-dir tools/tool-signatures \
+    --cleanup-extracted
+```
+
+| Profile   | Name               | Intended Use                                                                 |
+| --------- | ------------------ | ---------------------------------------------------------------------------- |
+| Profile C | One-shot Forensics | --extract-mode FULL - Used for unusual, complex, or weird bundles            |
+```bash
+PYTHONPATH=tools python3 -m sos_triage analyze \
+    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
+    --extract-mode full \
     --max-bytes 8000000 \
     --max-events 2000 \
     --verbose \
