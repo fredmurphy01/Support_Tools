@@ -206,10 +206,20 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 # SOS_TRIAGE
 
 Evaluates sosreports and produces structured deterministic analysis using configurable signatures and heuristics.
+* sos_analysis makes use of a signature file to allow for expansion.
+The file is called "sos-signatures.yaml" located in the tool-signatures directory by default.
+  By having a signature file we can add more content to the overall analysis rather than making code changes.
+ 
+There are different "profiles" with different intent of behaviour.
+* PROFILE A: Quick Triage (most common). This is what a support engineer runs first. This will probably be 80–90% of runs.
+* PROFILE B: Deep Analysis (default, no limits). Same tool, just no guardrails.
+* PROFILE C: One-shot Forensics / Weird Bundle
+
 
 ## Purpose
 
-Transforms raw logs into layered analytical artifacts:
+Transforms raw logs into layered analytical artifacts.
+Mental Model:
 
 ```text
 Raw Logs
