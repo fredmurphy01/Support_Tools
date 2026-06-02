@@ -422,8 +422,13 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 ```
 
 ### Example-4: Same as Example 1 but with a specific date (YYYY-MM-DD) and a +/- of two (2) days to analyze looking for a specific time and a timeframe around that time.
-    --time: Filter events to a point-in-time window centered on the given minute (format: YYYY-MM-DDThh:mm). Example: --time=2026-01-28T06:20
-    --time-window Time window half-width in hours when used with --time. The effective range is ±hours around --time. 0 means only that minute.
+> **--time**
+> Filter events to a point-in-time window centered on the given minute (format: YYYY-MM-DDThh:mm).
+> Example: --time=2026-01-28T06:20
+> **--time-window**
+> Time window half-width in hours when used with --time.
+> The effective range is ±hours around --time.
+> 0 means only that minute.
 ```bash
 PYTHONPATH=tools python3 -m etcd_analysis analyze \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
