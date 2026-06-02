@@ -205,46 +205,185 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 
 # SOS_TRIAGE
 
-Evaluates sosreports and produces structured deterministic analysis using configurable signatures and heuristics.
-* sos_analysis makes use of a signature file to allow for expansion.
-The file is called "sos-signatures.yaml" located in the tool-signatures directory by default.
-  By having a signature file we can add more content to the overall analysis rather than making code changes.
- 
-There are different "profiles" with different intent of behaviour.
-* PROFILE A: Quick Triage (most common). This is what a support engineer runs first. This will probably be 80–90% of runs.
-* PROFILE B: Deep Analysis (default, no limits). Same tool, just no guardrails.
-* PROFILE C: One-shot Forensics / Weird Bundle
+`sos_triage` evaluates sosreports for Mirantis-related product issues and produces a structured, deterministic RCA view into events.
 
+It uses a signature file, `sos-signatures.yaml`, to make the analysis expandable without requiring code changes.
+
+The signature file is located in `tools/tool-signatures` by default.
+
+---
 
 ## Purpose
 
-Transforms raw logs into layered analytical artifacts.
-Mental Model:
+The goal of `sos_triage` is to provide:
+
+* A single pane of glass report through `report.md`
+* Structured intermediate artifacts for deeper reasoning
+* Deterministic, configuration-driven analysis
+* Reproducible execution metadata
+
+`sos-signatures.yaml` is the primary configuration file for `sos_triage`.
+
+It defines:
+- Signatures (event detection)
+- Clustering rules
+- Heuristics
+- Timeline inclusion
+
+* What to scan inside an extracted sosreport
+* What is considered interesting
+* How matching events are interpreted
+* How noisy bursts are compressed
+* How the report timeline is built
+* What we scan inside an extracted sosreport (include/exclude globs, limits, encoding)
+* What we consider “interesting” (signatures: regex patterns + metadata)
+* How we interpret patterns into higher-level conclusions (heuristics)
+* How we compress noisy bursts (context_grouping / clustering policy)
+* How we build the report timeline (timeline rules)
+
+
+---
+
+## Profiles
+
+| Profile   | Name               | Intended Use                                                 |
+| --------- | ------------------ | ------------------------------------------------------------ |
+| Profile A | Quick Triage       | Most common support-engineer workflow; likely 80–90% of runs |
+| Profile B | Deep Analysis      | No guardrails or limits; used for deeper inspection          |
+| Profile C | One-shot Forensics | Used for unusual, complex, or weird bundles                  |
+
+---
+
+## Mental Model
+
+`sos_triage` transforms raw logs into layered analytical artifacts:
 
 ```text
 Raw Logs
     ↓
-events.jsonl
+events.jsonl   (atomic observations)
     ↓
-clusters.json
+clusters.json  (temporal compression)
     ↓
-findings.json
+findings.json  (interpretive reasoning)
     ↓
-report.md
+report.md      (human-readable narrative)
 ```
 
-## Generated Artifacts
+`meta.json` records execution conditions and scan limits.
 
-* events.jsonl
-* clusters.json
-* findings.json
-* report.md
-* meta.json
+---
+
+## Architecture Summary
+
+Core principle:
+
+* Scan everything
+* Filter at event emission
+* Cluster after filtering
+* Derive findings from structured signal
+* Render narrative from findings and timeline
+
+The CLI controls scope and limits.
+
+The YAML config defines analysis logic.
+
+---
+
+## What "Cluster" Means
+
+In `sos_triage`, a cluster is a burst of semantically identical or near-identical events occurring close together in time.
+
+It is **not**:
+
+* A Kubernetes cluster
+* A node group
+* A distributed system concept
+
+It is a temporal aggregation construct.
+
+Think:
+
+```text
+This thing happened 137 times in 4 minutes.
+```
+
+Instead of emitting 137 lines into `report.md`, `sos_triage` collapses that repeated activity into one summarized object.
+
+Example:
+
+```text
+CLUSTER: 137 x raft peer connection failures in 00:04:13
+```
+
+This is signal compression.
+
+---
+
+## Output Artifacts
+
+All outputs are written to `--outdir`.
+
+| File            | Purpose                              |
+| --------------- | ------------------------------------ |
+| `events.jsonl`  | Atomic normalized observations       |
+| `clusters.json` | Burst compression of chatty patterns |
+| `findings.json` | Heuristic conclusions with evidence  |
+| `report.md`     | Human-readable RCA summary           |
+| `meta.json`     | Execution ledger and scan conditions |
+
+---
+
+## Operational Guidance
+
+When reviewing output:
+
+1. Read `report.md`
+2. Review `findings.json` for reasoning detail
+3. Inspect `clusters.json` for burst patterns
+4. Trace to `events.jsonl` if deeper context is required
+5. Always check `meta.json` for limits and severity filtering
+
+---
+
+## Command Notes
+
+### What `PYTHONPATH=tools` Does
+
+`PYTHONPATH=tools` tells Python to treat the `tools/` directory as a top-level module search path.
+
+Without this, Python may not know where to find the `tools/sos_triage` package.
+
+### What `-m` Does
+
+The `-m` flag tells Python to run a module as a script.
+
+In this case, it runs the `sos_triage` package as the executable entry point.
+
+---
 
 ## Quick Start
 
 ```bash
 PYTHONPATH=tools python3 -m sos_triage analyze \
-    tickets/12345678/sosreport.tar.xz \
-    --outdir tickets/12345678/sosanalysis
+    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
+    --extract-mode journal \
+    --max-bytes 8000000 \
+    --max-events 2000 \
+    --verbose \
+    --outdir tickets/12345678/sosanalysis \
+    --configs-dir tools/tool-signatures \
+    --cleanup-extracted
+```
+
+---
+
+## Keeping the Extracted Sosreport
+
+By default, the example above removes the extracted sosreport after analysis.
+
+To keep the extracted sosreport, remove this argument:
+
+```bash
+--cleanup-extracted
 ```
