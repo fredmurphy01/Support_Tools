@@ -31,8 +31,9 @@ python3 tools/sdnodes.py \
     --bundlepath tickets/12345678/docker-support-20260303-19_51_11
 ```
 
-## Common Examples
+
 <details>
+<summary>SDNODES Examples</summary>
 
 ### Example-1: Basic output (default is pretty)
 ```bash
