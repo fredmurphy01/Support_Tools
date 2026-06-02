@@ -265,7 +265,8 @@ It will remove sensitive customer information such as but not limited to:
 * MAC Addresses
 * Node Names
 
-## Generated Artifacts
+<details>
+<summary>Generated Artifacts</summary>
 
 ```text
 By default this will create:
@@ -291,6 +292,16 @@ By default this will create:
     6a - nodes_output.csv
     6a - sanitized_node_info.csv
 ```
+</details>
+
+
+### Example-1: Sanitize the bundle "tickets/12345678/docker-support-20260303-19_51_11", create additional json mapping file, and place sanitized bundle into "tickets/12345678" which will be called "docker-support-20260303-19_51_11-sanitized"
+```bash
+python3 tools/bundle_sanitize.py \
+    --bundle tickets/12345678/docker-support-20260303-19_51_11 \
+    --mapping \
+    --outdir tickets/12345678
+```
 
 <details>
 <summary>BUNDLE_SANITIZE Command Help</summary>
@@ -306,15 +317,6 @@ options:
   --mapping          Write sanitize_mapping.json
 ```
 </details>
-
-### Example-1: Sanitize the bundle "tickets/12345678/docker-support-20260303-19_51_11", create additional json mapping file, and place sanitized bundle into "tickets/12345678" which will be called "docker-support-20260303-19_51_11-sanitized"
-```bash
-python3 tools/bundle_sanitize.py \
-    --bundle tickets/12345678/docker-support-20260303-19_51_11 \
-    --mapping \
-    --outdir tickets/12345678
-```
-
 ---
 
 # ETCD_ANALYSIS
@@ -334,7 +336,7 @@ For example:
 * Generate severity-aware summaries
 * Produce structured output artifacts
 
-<detail>
+<details>
 <summary>Conceptual Model</summary>
 
 ```text
@@ -420,8 +422,8 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 ```
 
 ### Example-4: Same as Example 1 but with a specific date (YYYY-MM-DD) and a +/- of two (2) days to analyze looking for a specific time and a timeframe around that time.
-####               --time: Filter events to a point-in-time window centered on the given minute (format: YYYY-MM-DDThh:mm). Example: --time=2026-01-28T06:20
-####               --time-window Time window half-width in hours when used with --time. The effective range is ±hours around --time. 0 means only that minute.
+    --time: Filter events to a point-in-time window centered on the given minute (format: YYYY-MM-DDThh:mm). Example: --time=2026-01-28T06:20
+    --time-window Time window half-width in hours when used with --time. The effective range is ±hours around --time. 0 means only that minute.
 ```bash
 PYTHONPATH=tools python3 -m etcd_analysis analyze \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
