@@ -145,6 +145,7 @@ python3 tools/patterns_search.py \
     --date 2026-06-01 \
     --date-window-days 2
 ```
+</details>
 
 <details>
 <summary>PATTERNS_SEARCH Command Help</summary>
