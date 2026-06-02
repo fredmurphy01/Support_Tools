@@ -246,6 +246,7 @@ iptables: Resource temporarily unavailable
 unable to look up Node Feature Discovery
 ```
 </details>
+
 ---
 
 # BUNDLE_SANITIZE.PY
@@ -294,14 +295,19 @@ By default this will create:
 ```
 </details>
 
+<details>
+<summary>BUNDLE_SANITIZE Examples</summary>
 
-### Example-1: Sanitize the bundle "tickets/12345678/docker-support-20260303-19_51_11", create additional json mapping file, and place sanitized bundle into "tickets/12345678" which will be called "docker-support-20260303-19_51_11-sanitized"
+### Example-1: Sanitize the bundle "tickets/12345678/docker-support-20260303-19_51_11"
+> Create additional json mapping file
+> Place sanitized bundle into "tickets/12345678" which will be called "docker-support-20260303-19_51_11-sanitized"
 ```bash
 python3 tools/bundle_sanitize.py \
     --bundle tickets/12345678/docker-support-20260303-19_51_11 \
     --mapping \
     --outdir tickets/12345678
 ```
+</details>
 
 <details>
 <summary>BUNDLE_SANITIZE Command Help</summary>
@@ -317,6 +323,7 @@ options:
   --mapping          Write sanitize_mapping.json
 ```
 </details>
+
 ---
 
 # ETCD_ANALYSIS
@@ -440,7 +447,6 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
     --time-window 10
 ```
 </details>
-
 
 ---
 
