@@ -24,39 +24,43 @@ Displays node information from an MKE3 cluster support bundle with additional va
 
 > Note: This tool currently operates on MKE3 cluster-wide support bundles.
 
-## Quick Start
-
-```bash
-python3 tools/sdnodes.py \
-    --bundlepath tickets/12345678/docker-support-20260303-19_51_11
-```
-
-
 <details>
 <summary>SDNODES Examples</summary>
 
 ### Example-1: Basic output (default is pretty)
 ```bash
-python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11
+python3 tools/sdnodes.py \
+    --bundlepath tickets/12345678/docker-support-20260303-19_51_11
 ```
 
 ### Example-2: Extended output showing hardware (default is pretty)
 ```bash
-python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --extended-output 1
+python3 tools/sdnodes.py \
+    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
+    --extended-output 1
 ```
 ### Example-3: Output to console in csv style
 ```bash
-python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --pretty 0
+python3 tools/sdnodes.py \
+    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
+    --pretty 0
 ```
 
 ### Example-4: Output to a file (Typically used for output in csv format so the file can be imported to spreadsheet. Default file = nodes_output.csv)
 ```bash
-python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --pretty 0 --filesave 1 --outputfile outputdir/nodes_output_file.csv
+python3 tools/sdnodes.py --bundlepath \
+    tickets/12345678/docker-support-20260303-19_51_11 \
+    --pretty 0 \
+    --filesave 1 \
+    --outputfile outputdir/nodes_output_file.csv
 ```
 
 ### Example-5: Add columns Accountname & Ticket number to console output first two columns. Particularly useful if saving output file for later use.
 ```bash
-python3 tools/sdnodes.py --bundlepath tickets/12345678/docker-support-20260303-19_51_11 --accountname CORP-ABC --ticketnumber 12345678
+python3 tools/sdnodes.py \
+    --bundlepath tickets/12345678/docker-support-20260303-19_51_11 \
+    --accountname CORP-ABC \
+    --ticketnumber 12345678
 ```
 </details>
 
