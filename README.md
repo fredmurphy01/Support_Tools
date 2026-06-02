@@ -88,7 +88,7 @@ options:
                         Extended output level: 0=baseline (default) up to 4=most detailed, for now if >= 1 then displays hardware info
 
 ```
-<details>
+</details>
 
 ---
 
