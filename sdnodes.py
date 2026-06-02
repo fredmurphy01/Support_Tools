@@ -744,9 +744,9 @@ def _handle_top_level_interrupt() -> int:
 
 def cli_main() -> int:
     # Set up argument parser
-    parser = argparse.ArgumentParser(description="SDNODES Version: 1.12  Command line input enabled with:")
+    parser = argparse.ArgumentParser(description="SDNODES Version: 1.14  Command line input enabled with:")
     parser.add_argument("--pretty", type=int, choices=[0, 1], default=1, help="Set pretty level: 1=On (Default: no delimiters) 0=Off(Use a semicolon (;) as delimiter to enable import to spreadsheet)")
-    parser.add_argument("--outputfile", type=str, default='nodes_output.csv', help="Output file name (e.g., test.csv) -- (default = nodes_output.csv), can have a fully qualified path and filenamefor placement, else placed into pwd ")
+    parser.add_argument("--outputfile", type=str, default='nodes_output.csv', help="Output file name (e.g., test.csv) -- (default = nodes_output.csv), can have a fully qualified path and filename for placement (directory MUST exist), else placed into pwd ")
     parser.add_argument("--filesave", type=int, choices=[0,1], default=0, help="Turn on saving to output file. Default=0 disabled. If enabled see --outputfile")
     parser.add_argument("--accountname", type=str, default='<undefined account name>', help="Used to supply an Account Name if desired. Default = <undefined account name>. If using spaces in the Account Name be sure to enclose them in double quotes ")
     parser.add_argument("--ticketnumber", type=str, default='00000000', help="Used if you want to show output associated specifically with a ticket number. Default = 00000000" )
