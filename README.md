@@ -455,7 +455,7 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 
 The default signature file is:
 
-[`tools/tool-signatures/etcd-signatures.yaml`](tools/tool-signatures/etcd-signatures.yaml)
+[`tool-signatures/etcd-signatures.yaml`](tool-signatures/etcd-signatures.yaml)
 
 <details>
 <summary>Example signature structure</summary>
