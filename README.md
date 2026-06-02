@@ -256,7 +256,7 @@ Sanitizes extracted MKE3 support bundles and replaces customer-sensitive data wi
 It will remove sensitive customer information such as but not limited to:
 
 * IP Addresses
-* Hostnames
+* Hostnames (unique short hostnames, complex hostnames)
 * SHA Values
 * Cluster IDs
 * Node IDs
@@ -266,31 +266,35 @@ It will remove sensitive customer information such as but not limited to:
 * Node Names
 
 ## Generated Artifacts
+
+```text
 By default this will create:
-###  1 - Sanitized bundle directory
-###  2 - What was changed:
-####    2a - sanitize_changed_details.json
-####    2a - sanitize_changed_details.txt
+1 - Sanitized bundle directory
 
-###  3 - What files were changed:
-####    3a - sanitize_changed_files.json
-####    3a - sanitize_changed_files.txt
+2 - What was changed:
+    2a - sanitize_changed_details.json
+    2a - sanitize_changed_details.txt
+
+3 - What files were changed:
+    3a - sanitize_changed_files.json
+    3a - sanitize_changed_files.txt
  
-###  4 - Report outputs:
-####    4a - sanitize_report.html
-####    4a - sanitize_report.json
-####    4c - sanitize_report.md
+4 - Report outputs:
+    4a - sanitize_report.html
+    4a - sanitize_report.json
+    4c - sanitize_report.md
 
-###  5 - Json Mapping file of what maps to what from original to sanitized: Created with "--mapping" argv
-####    5a - sanitize_mapping.json
+5 - Json Mapping file of what maps to what from original to sanitized: Created with "--mapping" argv
+    5a - sanitize_mapping.json
 
-###  6 - SDNODE Before Sanitize and After Sanitize:
-####    6a - nodes_output.csv
-####    6a - sanitized_node_info.csv
-### Sanitized Content
+6 - SDNODE Before Sanitize and After Sanitize:
+    6a - nodes_output.csv
+    6a - sanitized_node_info.csv
+```
 
 <details>
 <summary>BUNDLE_SANITIZE Command Help</summary>
+
 ```text
 python3 tools/bundle_sanitize.py -h
 usage: bundle_sanitize.py [-h] --bundle BUNDLE --outdir OUTDIR [--mapping] [--workers WORKERS]
