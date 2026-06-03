@@ -1338,16 +1338,16 @@ It is **not**:
 
 It is a temporal aggregation construct.
 
+```text
 Think:
-This thing happened 137 times in 4 minutes.
-```
+    This thing happened 137 times in 4 minutes.
+
 Instead of emitting 137 lines into `report.md`, `sos_triage` collapses that repeated activity into one summarized object.
 Example:
-```text
-CLUSTER: 137 x raft peer connection failures in 00:04:13
-```
+    CLUSTER: 137 x raft peer connection failures in 00:04:13
 
 This is signal compression.
+```
 
 </details>
 
