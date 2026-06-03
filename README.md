@@ -17,7 +17,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 | `sos_triage`         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ---
-# 🖥️ SDNODES.PY
+## 🖥️ SDNODES.PY
 ---
 
 
@@ -250,7 +250,7 @@ unable to look up Node Feature Discovery
 </details>
 
 ---
-# 🧹 BUNDLE_SANITIZE.PY
+## 🧹 BUNDLE_SANITIZE.PY
 ---
 
 
@@ -328,7 +328,7 @@ options:
 </details>
 
 ---
-# ⚙️ ETCD_ANALYSIS
+## ⚙️ ETCD_ANALYSIS
 ---
 
 
@@ -453,11 +453,11 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 </details>
 
 
-## ETCD Signature File Content & Example
+### ETCD Signature File Content & Example
 
-`etcd_analysis` uses a YAML signature file to define detectable ETCD patterns and interpretation rules.
+`etcd_analysis` uses a YAML signature file `etcd-signatures.yaml` to define detectable ETCD patterns and interpretation rules.
 
-The default signature file is:
+The default signature file is found:
 
 [`tool-signatures/etcd-signatures.yaml`](tool-signatures/etcd-signatures.yaml)
 
@@ -1262,50 +1262,30 @@ reserved:
 
 
 ---
-# 📊 SOS_TRIAGE
+## 📊 SOS_TRIAGE
 ---
 
+Analyzes sosreports with a strong emphasis on Mirantis products to produce a structured and deterministic RCA view into events.
+For example, analytics regarding one such item:
+* Signatures + heuristics configuration for analyzing Docker Swarm manager
+* Instability (raft/quorum/leadership), gossip/memberlist degradation, and
+* Docker daemon restarts from sosreport artifacts.
 
-`sos_triage` evaluates sosreports for Mirantis-related product issues and produces a structured, deterministic RCA view into events.
-
-It uses a signature file, `sos-signatures.yaml`, to make the analysis expandable without requiring code changes.
-
-The signature file is located in `tools/tool-signatures` by default.
-
----
-
-## Purpose
-
-The goal of `sos_triage` is to provide:
-
+## Key Capabilities
 * A single pane of glass report through `report.md`
 * Structured intermediate artifacts for deeper reasoning
 * Deterministic, configuration-driven analysis
 * Reproducible execution metadata
-
-`sos-signatures.yaml` is the primary configuration file for `sos_triage`.
-
-It defines:
-* Signatures (event detection)
-* Clustering rules
-* Heuristics
-* Timeline inclusion
-
-* What to scan inside an extracted sosreport
-* What is considered interesting
-* How matching events are interpreted
-* How noisy bursts are compressed
-* How the report timeline is built
-* What we scan inside an extracted sosreport (include/exclude globs, limits, encoding)
-* What we consider “interesting” (signatures: regex patterns + metadata)
-* How we interpret patterns into higher-level conclusions (heuristics)
-* How we compress noisy bursts (context_grouping / clustering policy)
-* How we build the report timeline (timeline rules)
+## Key Principles
+* Scan everything
+* Filter at event emission
+* Cluster after filtering
+* Derive findings from structured signal
+* Render narrative from findings and timeline
 
 
----
 
-## Profiles
+## Operating Profiles
 | Profile | Name | Purpose |
 |----------|----------|----------|
 | A | Quick Triage | Default |
@@ -1325,14 +1305,13 @@ No guardrails or limits; used for deeper inspection.
 Used for unusual, complex, or weird bundles.
 
 
-
 ---
 
-## Mental Model
-
+<details>
+<summary>Conceptual Model</summary>
 `sos_triage` transforms raw logs into layered analytical artifacts:
-
 ```text
+
 Raw Logs
     ↓
 events.jsonl   (atomic observations)
@@ -1342,27 +1321,9 @@ clusters.json  (temporal compression)
 findings.json  (interpretive reasoning)
     ↓
 report.md      (human-readable narrative)
-```
 
 `meta.json` records execution conditions and scan limits.
-
----
-
-## Architecture Summary
-
-Core principle:
-
-* Scan everything
-* Filter at event emission
-* Cluster after filtering
-* Derive findings from structured signal
-* Render narrative from findings and timeline
-
-The CLI controls scope and limits.
-
-The YAML config defines analysis logic.
-
----
+```
 
 ## What "Cluster" Means
 
@@ -1377,24 +1338,20 @@ It is **not**:
 It is a temporal aggregation construct.
 
 Think:
-
-```text
 This thing happened 137 times in 4 minutes.
 ```
-
 Instead of emitting 137 lines into `report.md`, `sos_triage` collapses that repeated activity into one summarized object.
-
 Example:
-
 ```text
 CLUSTER: 137 x raft peer connection failures in 00:04:13
 ```
 
 This is signal compression.
 
----
+</details>
 
-## Output Artifacts
+<details>
+<summary>Output Artifacts</summary>
 
 All outputs are written to `--outdir`.
 
@@ -1406,7 +1363,6 @@ All outputs are written to `--outdir`.
 | `report.md`     | Human-readable RCA summary           |
 | `meta.json`     | Execution ledger and scan conditions |
 
----
 
 ## Operational Guidance
 
@@ -1418,25 +1374,19 @@ When reviewing output:
 4. Trace to `events.jsonl` if deeper context is required
 5. Always check `meta.json` for limits and severity filtering
 
----
+```text
+- What is PYTHONPATH doing?
+    - Telling Python to treat the tools/ directory as a top-level module search path.
+    - Without this Python would not know where to find the "tools/sos_triage"
+    - We are saying here: The package root lives inside /tools
 
-## Command Notes
+    - What does the -m mean?
+        - This is very important and tells python to run a module as a script, which effectively is this entire package sos_triage.
+```
+</details>
 
-### What `PYTHONPATH=tools` Does
-
-`PYTHONPATH=tools` tells Python to treat the `tools/` directory as a top-level module search path.
-
-Without this, Python may not know where to find the `tools/sos_triage` package.
-
-### What `-m` Does
-
-The `-m` flag tells Python to run a module as a script.
-
-In this case, it runs the `sos_triage` package as the executable entry point.
-
----
-
-## Quick Start
+<details>
+<summary>SOS_TRIAGE Examples</summary>
 
 | Profile   | Name               | Intended Use                                                                 |
 | --------- | ------------------ | ---------------------------------------------------------------------------- |
@@ -1482,7 +1432,6 @@ PYTHONPATH=tools python3 -m sos_triage analyze \
     --cleanup-extracted
 ```
 
----
 
 ## Keeping the Extracted Sosreport
 
@@ -1493,7 +1442,716 @@ To keep the extracted sosreport, remove this argument:
 ```bash
 --cleanup-extracted
 ```
+</details>
 
+### SOS_TRIAGE Signature File Content & Example
+
+`sos_triage` uses a YAML signature file `sos-signatures.yaml` to define detectable patterns and interpretation rules.
+
+The default signature file is found:
+
+[`tool-signatures/sos-signatures.yaml`](tool-signatures/sos-signatures.yaml)
+
+It defines:
+* Signatures (event detection)
+* Clustering rules
+* Heuristics
+* Timeline inclusion
+* What to scan inside an extracted sosreport
+* What is considered interesting
+* How matching events are interpreted
+* How noisy bursts are compressed
+* How the report timeline is built
+* What we scan inside an extracted sosreport (include/exclude globs, limits, encoding)
+* What we consider “interesting” (signatures: regex patterns + metadata)
+* How we interpret patterns into higher-level conclusions (heuristics)
+* How we compress noisy bursts (context_grouping / clustering policy)
+* How we build the report timeline (timeline rules)
+
+<details>
+<summary>Example signature structure</summary>
+
+```yaml
+version: 5
+name: sos-signatures
+description: >
+  Signatures + heuristics configuration for analyzing Docker Swarm manager
+  instability (raft/quorum/leadership), gossip/memberlist degradation, and
+  Docker daemon restarts from sosreport artifacts.
+
+###############################################################################
+# Global defaults (apply unless overridden)
+###############################################################################
+defaults:
+  severities: [critical, high, medium, info]
+
+  # Default context capture (Approach A: streaming with small buffer)
+  context:
+    pre: 1
+    post: 2
+    max_line_length: 500          # truncate long lines in stored context/excerpt
+    trim_whitespace: true         # trim leading/trailing whitespace for stored strings
+    store_context_in_events_jsonl: true
+    store_context_in_findings: false
+
+  # Excerpt defaults used in findings.json and report.md
+  excerpt:
+    max_chars: 240                # short excerpt for evidence samples
+
+  # Event ID strategy: two IDs
+  event_id:
+    sequential_prefix: "evt_"
+    sequential_width: 6           # evt_000001
+    stable_hash:
+      algorithm: "sha1"
+      hex_chars: 12              # event_hash like e1c2a9f9b2c6
+      canonical_fields:
+        - source_relpath
+        - line_number
+        - signature_id
+        - ts_normalized_or_raw
+        - event_type
+        - peer
+        - port
+        - message_normalized
+
+  # Cluster ID strategy: two IDs (stable hash prefers membership)
+  cluster_id:
+    sequential_prefix: "clu_"
+    sequential_width: 6           # clu_000001
+    stable_hash:
+      algorithm: "sha1"
+      hex_chars: 12
+      canonical_fields:
+        - event_type
+        - peer
+        - port
+        - start_ts_normalized_or_raw
+        - end_ts_normalized_or_raw
+        - count
+        - member_event_hashes_sorted   # preferred stability anchor
+
+###############################################################################
+# sosreport source discovery (config-driven)
+###############################################################################
+sources:
+  description: >
+    Controls which files inside the extracted sosreport are scanned for
+    signatures. Uses glob patterns relative to the sosreport root.
+
+  # Include globs: scanned in the order listed (useful for determinism)
+  include_globs:
+    # Docker / container runtime logs
+    - "var/log/docker*"
+    - "var/log/containerd*"
+
+    # Common syslog locations across distros
+    - "var/log/messages*"
+    - "var/log/syslog*"
+    - "var/log/daemon.log*"
+    - "var/log/kern.log*"
+
+    # sos captured commands (journald + systemd + kernel)
+    - "sos_commands/logs/journalctl*"
+    - "sos_commands/systemd/systemctl*"
+    - "sos_commands/kernel/dmesg*"
+
+    # Some sosreports capture docker info / swarm state here
+    - "sos_commands/docker/*"
+    - "sos_strings/logs/journalctl*.tailed"
+    - "var/log/installer/syslog*"
+
+  # Exclude globs: remove noisy/binary/huge content
+  exclude_globs:
+    # Compressed files usually require extra handling; skip initially
+    - "**/*.gz"
+    - "**/*.xz"
+    - "**/*.bz2"
+    - "**/*.zip"
+
+    # Binary journal files (not text); skip unless you later add a binary reader
+    - "**/var/log/journal/**"
+    - "**/*.journal"
+
+    # Very large core dumps, etc.
+    - "**/core*"
+    - "**/*.core"
+
+  # Guardrails
+  file_limits:
+    max_file_size_bytes: 104857600     # 100 MiB per file
+    max_total_size_bytes: 536870912    # 512 MiB total scanned
+    max_files: 5000
+
+  # File handling behavior
+  read:
+    encoding: "utf-8"
+    errors: "ignore"
+    line_ending: "auto"
+
+###############################################################################
+# Output contracts and schema versions
+###############################################################################
+outputs:
+  description: >
+    Declares the schema versions for each output artifact. The tool will
+    stamp these into the generated files and may validate compatibility.
+
+  schemas:
+    meta: "meta-v1"
+    events: "events-v1"
+    findings: "findings-v1"
+    report: "report-md-v1"
+
+  files:
+    meta: "meta.json"
+    events: "events.jsonl"
+    findings: "findings.json"
+    report: "report.md"
+
+###############################################################################
+# Signature definitions
+###############################################################################
+signatures:
+
+  ###########################################################################
+  # Docker daemon lifecycle (manager-impacting)
+  ###########################################################################
+  - id: docker_systemd_stop
+    group: docker_daemon
+    event_type: docker_restart
+    severity: high
+    confidence_weight: 0.90
+    manager_only: true
+    ports: []
+    rationale: >
+      Stopping Docker on a Swarm manager removes it from raft participation
+      and can trigger leader elections.
+    patterns:
+      - "systemd\\[1\\]: Stopping Docker"
+    relationships:
+      follows:
+        - event_type: docker_sigterm
+          within_seconds: 120
+    context:
+      pre: 2
+      post: 3
+
+  - id: docker_systemd_start
+    group: docker_daemon
+    event_type: docker_restart
+    severity: medium
+    confidence_weight: 0.85
+    manager_only: true
+    ports: []
+    rationale: >
+      Docker start following a stop; used for restart storm correlation.
+    patterns:
+      - "systemd\\[1\\]: Started Docker"
+    relationships:
+      follows:
+        - event_type: docker_restart
+          within_seconds: 600
+    context:
+      pre: 1
+      post: 2
+
+  - id: dockerd_sigterm
+    group: docker_daemon
+    event_type: docker_sigterm
+    severity: high
+    confidence_weight: 0.95
+    manager_only: true
+    ports: []
+    rationale: >
+      Dockerd received SIGTERM (intentional shutdown via systemd/automation),
+      not a crash.
+    patterns:
+      - "dockerd.*received signal.*terminated"
+    context:
+      pre: 1
+      post: 2
+
+  - id: docker_leftover_iptables
+    group: docker_daemon
+    event_type: docker_cleanup_warning
+    severity: medium
+    confidence_weight: 0.70
+    manager_only: false
+    ports: []
+    rationale: >
+      Leftover iptables processes can indicate rapid/repeated restarts and
+      incomplete cleanup.
+    patterns:
+      - "docker\\.service: Found left-over process.*iptables"
+    context:
+      pre: 1
+      post: 1
+
+  ###########################################################################
+  # Swarm leadership and raft consensus
+  ###########################################################################
+  - id: raft_leadership_lost
+    group: raft
+    event_type: raft_leadership_loss
+    severity: critical
+    confidence_weight: 0.95
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Loss of raft leader indicates control-plane instability and can disrupt
+      cluster management operations.
+    patterns:
+      - "(?i)(lost leader|no leader)"
+    relationships:
+      follows:
+        - event_type: raft_peer_connect_error
+          within_seconds: 600
+        - event_type: memberlist_timeout
+          within_seconds: 900
+    context:
+      pre: 2
+      post: 5
+
+  - id: raft_leadership_lost_generic
+    group: raft
+    event_type: raft_leadership_loss
+    severity: critical
+    confidence_weight: 0.85
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Broad matching for leadership loss / leader unavailability messages that
+      vary by Docker/Swarm versions and underlying raft implementations.
+      Used when exact wording is unknown.
+    patterns:
+      - "(?i)leadership (lost|was lost|has been lost)"
+      - "(?i)lost (the )?leader"
+      - "(?i)no (current )?leader"
+      - "(?i)leader (went away|has changed|changed)"
+      - "(?i)became (candidate|follower)"
+      - "(?i)starting a new election"
+      - "(?i)election tick"
+    relationships:
+      follows:
+        - event_type: raft_peer_connect_error
+          within_seconds: 900
+        - event_type: memberlist_timeout
+          within_seconds: 1200
+    context:
+      pre: 2
+      post: 6
+
+  - id: swarm_controlplane_leader_generic
+    group: swarm
+    event_type: swarm_leader_change
+    severity: high
+    confidence_weight: 0.80
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Broad matching for Swarm control-plane components (manager/dispatcher/raft)
+      reporting leader changes or leader unavailability where exact wording differs.
+    patterns:
+      - "(?i)manager.*(leader|leadership)"
+      - "(?i)dispatcher.*(leader|leadership)"
+      - "(?i)raft.*(leader|leadership)"
+      - "(?i)swarm.*(leader|leadership)"
+    relationships:
+      follows:
+        - event_type: raft_peer_connect_error
+          within_seconds: 900
+        - event_type: memberlist_timeout
+          within_seconds: 1200
+    context:
+      pre: 2
+      post: 6
+
+  - id: raft_new_election
+    group: raft
+    event_type: raft_election
+    severity: high
+    confidence_weight: 0.90
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Elections are expected after manager failure/restart; repeated elections
+      indicate instability.
+    patterns:
+      - "starting a new election"
+    relationships:
+      follows:
+        - event_type: raft_leadership_loss
+          within_seconds: 120
+    context:
+      pre: 2
+      post: 5
+
+  - id: raft_became_leader
+    group: raft
+    event_type: raft_leadership_gained
+    severity: info
+    confidence_weight: 0.85
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Used to correlate recovery and leadership churn.
+    patterns:
+      - "became leader"
+    relationships:
+      follows:
+        - event_type: raft_election
+          within_seconds: 600
+    context:
+      pre: 1
+      post: 3
+
+  - id: raft_peer_connect_error
+    group: raft
+    event_type: raft_peer_connect_error
+    severity: high
+    confidence_weight: 0.90
+    manager_only: true
+    ports: [2377]
+    rationale: >
+      Failure to connect to a peer on TCP/2377 indicates a manager is
+      unavailable (daemon down/restarting) or connectivity is disrupted.
+    patterns:
+      - "dial tcp .*:2377.*(i/o timeout|connection refused|context deadline exceeded)"
+    capture:
+      peer: "(\\d+\\.\\d+\\.\\d+\\.\\d+)"
+      port: "(2377)"
+      reason: "(i/o timeout|connection refused|context deadline exceeded)"
+    relationships:
+      precedes:
+        - event_type: raft_leadership_loss
+          within_seconds: 900
+    context:
+      pre: 1
+      post: 3
+
+  ###########################################################################
+  # Swarm membership / gossip (early instability indicators)
+  ###########################################################################
+  - id: memberlist_timeout
+    group: memberlist
+    event_type: memberlist_timeout
+    severity: high
+    confidence_weight: 0.85
+    manager_only: true
+    ports: [7946]
+    rationale: >
+      Timeouts on gossip port 7946 suggest network instability, packet loss,
+      or intermittent filtering and often precede raft elections.
+    patterns:
+      - "memberlist:.*:7946.*i/o timeout"
+      - "memberlist:.*no acks received"
+    capture:
+      peer: "(\\d+\\.\\d+\\.\\d+\\.\\d+)"
+      port: "(7946)"
+    relationships:
+      precedes:
+        - event_type: raft_election
+          within_seconds: 1200
+        - event_type: raft_leadership_loss
+          within_seconds: 1800
+    context:
+      pre: 1
+      post: 2
+
+  - id: memberlist_suspect
+    group: memberlist
+    event_type: memberlist_suspect
+    severity: medium
+    confidence_weight: 0.80
+    manager_only: true
+    ports: [7946]
+    rationale: >
+      Nodes marked suspect indicate degraded membership health. Useful as
+      supporting evidence for instability.
+    patterns:
+      - "memberlist: Suspect"
+    relationships:
+      follows:
+        - event_type: memberlist_timeout
+          within_seconds: 600
+    context:
+      pre: 1
+      post: 2
+
+  ###########################################################################
+  # System / resource destabilizers (supporting evidence)
+  ###########################################################################
+  - id: oom_killer
+    group: system_health
+    event_type: oom_event
+    severity: critical
+    confidence_weight: 0.90
+    manager_only: false
+    ports: []
+    rationale: >
+      OOM can kill dockerd/containerd and trigger restarts; can also delay raft
+      responsiveness.
+    patterns:
+      - "Out of memory"
+      - "Killed process"
+      - "oom-killer"
+    relationships:
+      precedes:
+        - event_type: docker_restart
+          within_seconds: 1800
+    context:
+      pre: 1
+      post: 3
+
+  - id: disk_full
+    group: system_health
+    event_type: disk_full
+    severity: high
+    confidence_weight: 0.85
+    manager_only: false
+    ports: []
+    rationale: >
+      Disk exhaustion can prevent raft log writes and disrupt Docker operations.
+    patterns:
+      - "No space left on device"
+      - "ENOSPC"
+    context:
+      pre: 1
+      post: 2
+
+  - id: time_step
+    group: system_health
+    event_type: time_step
+    severity: medium
+    confidence_weight: 0.70
+    manager_only: false
+    ports: []
+    rationale: >
+      Significant clock adjustments can destabilize distributed consensus and
+      produce leader churn.
+    patterns:
+      - "Time has been changed"
+      - "System clock.*changed"
+      - "stepped time"
+    relationships:
+      precedes:
+        - event_type: raft_election
+          within_seconds: 3600
+    context:
+      pre: 1
+      post: 2
+
+###############################################################################
+# Temporal heuristics (hybrid approach: thresholds fire; relationships support)
+###############################################################################
+heuristics:
+  - id: swarm_leader_churn
+    title: "Swarm leader churn / control-plane instability"
+    enabled: true
+    severity: high
+    confidence_weight: 0.85
+    window_seconds: 900
+    thresholds:
+      - event_type: swarm_leader_change
+        count_gte: 3
+    supports:
+      - event_type: raft_peer_connect_error
+      - event_type: memberlist_timeout
+      - event_type: raft_election
+      - event_type: raft_leadership_loss
+    outputs:
+      tags: ["swarm_instability", "leader_churn"]
+      likely_causes:
+        - "raft elections due to manager connectivity loss or latency"
+        - "packet loss/congestion or ACL/firewall impacting manager-to-manager traffic"
+        - "manager restarts or daemon unavailability causing leadership turnover"
+      ports_implicated: [2377, 7946]
+
+  - id: swarm_gossip_instability
+    title: "Swarm gossip instability detected"
+    enabled: true
+    severity: high
+    confidence_weight: 0.80
+    window_seconds: 600
+    thresholds:
+      - event_type: memberlist_timeout
+        count_gte: 5
+    supports:
+      - event_type: memberlist_suspect
+      - event_type: raft_election
+      - event_type: raft_leadership_loss
+    outputs:
+      tags: ["network_suspected", "memberlist"]
+      likely_causes:
+        - "packet loss or congestion between managers"
+        - "intermittent firewall/ACL behavior affecting TCP/7946"
+        - "MTU mismatch impacting overlay/gossip traffic"
+      ports_implicated: [7946]
+
+  - id: repeated_elections
+    title: "Repeated raft elections detected"
+    enabled: true
+    severity: high
+    confidence_weight: 0.85
+    window_seconds: 900
+    thresholds:
+      - event_type: raft_election
+        count_gte: 2
+    supports:
+      - event_type: raft_peer_connect_error
+      - event_type: raft_leadership_loss
+    outputs:
+      tags: ["raft_instability"]
+      likely_causes:
+        - "manager connectivity loss or latency on TCP/2377"
+        - "manager restarts causing raft churn"
+      ports_implicated: [2377]
+
+  - id: docker_restart_storm
+    title: "Docker restart storm detected"
+    enabled: true
+    severity: high
+    confidence_weight: 0.90
+    window_seconds: 600
+    thresholds:
+      - event_type: docker_restart
+        count_gte: 3
+    supports:
+      - event_type: docker_sigterm
+      - event_type: docker_cleanup_warning
+      - event_type: raft_election
+      - event_type: raft_leadership_loss
+    outputs:
+      tags: ["operator_action_suspected", "restart_storm"]
+      likely_causes:
+        - "manual restarts"
+        - "automation restarting docker due to health checks"
+      ports_implicated: [2377, 7946]
+
+  - id: leadership_loss_present
+    title: "Raft leadership loss observed"
+    enabled: true
+    severity: critical
+    confidence_weight: 0.95
+    window_seconds: 1800
+    thresholds:
+      - event_type: raft_leadership_loss
+        count_gte: 1
+    supports:
+      - event_type: raft_election
+      - event_type: raft_peer_connect_error
+      - event_type: memberlist_timeout
+    outputs:
+      tags: ["leadership_loss"]
+      likely_causes:
+        - "loss of manager connectivity on 2377/7946"
+        - "manager restart or daemon unavailability"
+      ports_implicated: [2377, 7946]
+
+###############################################################################
+# Context grouping (event clustering for chatty patterns)
+###############################################################################
+context_grouping:
+  enabled: true
+  description: >
+    Groups related events into clusters to summarize bursts (e.g., many
+    memberlist timeouts or raft peer connection failures) and reduce noise
+    in timelines while preserving diagnostic value.
+
+  chatty_event_types:
+    - memberlist_timeout
+    - raft_peer_connect_error
+
+  cluster_window_seconds: 60
+  max_gap_seconds: 30
+  group_by_keys: [event_type, peer, port]
+  min_events: 3
+
+  outputs:
+    include_in_findings: true
+    include_in_timeline: true
+    include_in_report: true
+
+    timeline_cluster_row_format: >
+      CLUSTER: {event_type} to {peer}:{port} — {count} events from {start} to {end}
+
+    sample_strategy:
+      include_first: true
+      include_last: true
+      include_max_samples: 3
+
+    cluster_fields:
+      - count
+      - start
+      - end
+      - top_reasons
+      - sources
+
+###############################################################################
+# Timeline construction (Option 2: from events.jsonl with clustering + downsample)
+###############################################################################
+timeline:
+  enabled: true
+  description: >
+    Builds the report timeline from events.jsonl using clustering for chatty
+    event types, always-keep rules for critical events, and time bucketing to
+    reduce noise while preserving causal story.
+
+  max_rows: 40
+  bucket_seconds: 120
+  quiet_gap_seconds: 1200
+
+  include_event_types:
+    - raft_leadership_loss
+    - raft_election
+    - raft_leadership_gained
+    - raft_peer_connect_error
+    - docker_restart
+    - docker_sigterm
+    - docker_cleanup_warning
+    - memberlist_timeout
+    - memberlist_suspect
+    - oom_event
+    - disk_full
+    - time_step
+
+  always_keep:
+    severity_at_least: critical
+    first_event_type_occurrence: true
+    referenced_by_findings: true
+    cluster_rows: true
+    gap_boundary_markers: true
+
+  downsample:
+    per_bucket:
+      max_per_event_type: 1
+      pick: earliest
+
+    overflow_policy:
+      drop_order:
+        - info
+        - medium
+        - high
+      prefer_keep:
+        - raft_leadership_loss
+        - raft_election
+        - docker_restart
+        - memberlist_timeout
+        - raft_peer_connect_error
+
+  chatty_handling:
+    memberlist_timeout:
+      prefer_clusters: true
+      max_peers_per_10min: 2
+      peer_diversity_note: true
+    raft_peer_connect_error:
+      prefer_clusters: true
+      max_peers_per_10min: 2
+      peer_diversity_note: true
+
+```
+</details>
 ---
 
 ---
