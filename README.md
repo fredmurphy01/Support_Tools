@@ -136,7 +136,7 @@ options:
 </details>
 
 ---
- 🔍
+## 🔍
 ## PATTERNS_SEARCH.PY
 ---
 
@@ -365,7 +365,7 @@ options:
 </details>
 
 ---
- ⚙️
+## ⚙️
 ## ETCD_ANALYSIS
 ---
 
@@ -1300,7 +1300,7 @@ reserved:
 
 
 ---
- 📊
+## 📊
 ## SOS_TRIAGE
 ---
 
