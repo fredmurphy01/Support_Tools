@@ -10,7 +10,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 ### Available Tools
 
-- [SDNODES.PY](#-sdnodespy)
+- [SDNODES.PY](#sdnodespy)
 - [PATTERNS_SEARCH.PY](-patterns_searchpy)
 - [BUNDLE_SANITIZE.PY](#-bundle_sanitizepy)
 - [ETCD_ANALYSIS](#️-etcd_analysis)
