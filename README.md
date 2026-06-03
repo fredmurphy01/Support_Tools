@@ -125,7 +125,9 @@ options:
 ```
 </details>
 ---
+
 [⬆ Back to Top](#top)
+
 ---
 ## 🔍
 ## PATTERNS_SEARCH.PY
@@ -356,7 +358,9 @@ options:
 ```
 </details>
 ---
+
 [⬆ Back to Top](#top)
+
 ---
 ## ⚙️
 ## ETCD_ANALYSIS
@@ -1292,7 +1296,9 @@ reserved:
 </details>
 
 ---
+
 [⬆ Back to Top](#top)
+
 ---
 ## 📊
 ## SOS_TRIAGE
@@ -2188,5 +2194,7 @@ timeline:
 ```
 </details>
 ---
+
 [⬆ Back to Top](#top)
+
 ---
