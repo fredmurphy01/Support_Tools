@@ -25,6 +25,27 @@ Displays baseline cluster information from an MKE3 cluster-wide support bundle w
 
 | CLUSTER-ID | HOSTNAME | NODE-ID | ROLE | TYPE | MCRv | MKEv | MSRv | SWARM? | KUBE? | OS | OSver | ARCH | HYPERV | CPUs | RAM | GPU | UPTIME | AVAIL | STATE | IP/MASK | COLLECT | CREATED | UPDATED | STATUS_MESSAGE | BUNDLEDATE |
 
+Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
+
+> Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
+
+<details>
+<summary>Example Output</summary>
+
+```text
+CLUSTER-ID;HOSTNAME;NODE-ID;ROLE;TYPE;MCRv;MKEv;MSRv;SWARM?;KUBE?;OS;OSver;ARCH;HYPERV;CPUs;RAM;GPU;UPTIME;AVAIL;STATE;IP/MASK;COLLECT;CREATED/UPDATED;STATUS_MESSAGE;BUNDLEDATE
+
+cluster-001;host-001;node-001;leader ;MKE ;23.0.9;3.8.7;-.-.--;swarm ;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;16:09;active;ready;10.0.1.1/28;/System;2024-04-26 / 2025-12-10;Healthy MKE manager;03/06/2026
+
+cluster-001;host-002;node-002;manager;MKE ;23.0.9;3.8.7;-.-.--;swarm ;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;1 day;active;ready;10.0.1.2/28;/System;2024-04-27 / 2025-12-10;Healthy MKE manager;03/06/2026
+
+cluster-001;host-004;node-004;worker ;MCR ;23.0.9;3.8.7;-.-.--;------;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;1 day;active;ready;10.0.1.4/27;/Shared;2024-04-26 / 2025-12-09;Healthy MKE worker;03/06/2026
+```
+
+</details>
+
+
+
 > Note: This tool currently operates on MKE3 cluster-wide support bundles.
 
 <details>
