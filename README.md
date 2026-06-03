@@ -1309,7 +1309,8 @@ Used for unusual, complex, or weird bundles.
 
 <details>
 <summary>Conceptual Model</summary>
-`sos_triage` transforms raw logs into layered analytical artifacts:
+sos_triage transforms raw logs into layered analytical artifacts:
+
 ```text
 
 Raw Logs
@@ -1321,8 +1322,8 @@ clusters.json  (temporal compression)
 findings.json  (interpretive reasoning)
     ↓
 report.md      (human-readable narrative)
-
-`meta.json` records execution conditions and scan limits.
+    ↓
+meta.json records execution conditions and scan limits.
 ```
 
 ## What "Cluster" Means
@@ -2153,6 +2154,7 @@ timeline:
 
 ```
 </details>
+
 ---
 
 ---
