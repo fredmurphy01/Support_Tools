@@ -1,3 +1,4 @@
+<a id="top"></a>
 # Support Tools
 
 A collection of support-engineering utilities for analyzing support bundles, sosreports, ETCD behavior, and cluster-wide operational issues.
@@ -5,17 +6,6 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 **Recommended Python Version:** 3.9+
 
 ---
-
-## Contents
-
-### Available Tools
-
-- [SDNODES.PY](#sdnodespy)
-- [PATTERNS_SEARCH.PY](#patterns_searchpy)
-- [BUNDLE_SANITIZE.PY](#bundle_sanitizepy)
-- [ETCD_ANALYSIS](#️etcd_analysis)
-- [SOS_TRIAGE](#sos_triage)
-
 
 ## Available Tools
 
@@ -134,7 +124,8 @@ options:
 
 ```
 </details>
-
+---
+[⬆ Back to Top](#top)
 ---
 ## 🔍
 ## PATTERNS_SEARCH.PY
@@ -285,7 +276,8 @@ iptables: Resource temporarily unavailable
 unable to look up Node Feature Discovery
 ```
 </details>
-
+---
+[⬆ Back to Top](#top)
 ---
 ## BUNDLE_SANITIZE.PY 🧹
 ---
@@ -363,7 +355,8 @@ options:
   --mapping          Write sanitize_mapping.json
 ```
 </details>
-
+---
+[⬆ Back to Top](#top)
 ---
 ## ⚙️
 ## ETCD_ANALYSIS
@@ -1298,7 +1291,8 @@ reserved:
 
 </details>
 
-
+---
+[⬆ Back to Top](#top)
 ---
 ## 📊
 ## SOS_TRIAGE
@@ -2193,7 +2187,6 @@ timeline:
 
 ```
 </details>
-
 ---
-
+[⬆ Back to Top](#top)
 ---
