@@ -29,17 +29,27 @@ Displays baseline cluster information from an MKE3 cluster-wide support bundle w
 
 > Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
 
+
+Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
+
+> Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
+
 <details>
 <summary>Example Output</summary>
 
 ```text
-CLUSTER-ID;HOSTNAME;NODE-ID;ROLE;TYPE;MCRv;MKEv;MSRv;SWARM?;KUBE?;OS;OSver;ARCH;HYPERV;CPUs;RAM;GPU;UPTIME;AVAIL;STATE;IP/MASK;COLLECT;CREATED/UPDATED;STATUS_MESSAGE;BUNDLEDATE
+CLUSTER-ID  HOSTNAME    NODE-ID      ROLE       TYPE    MCRv    MKEv    MSRv    SWARM?  KUBE?   OS      OSver                           ARCH    HYPERV  CPUs    RAM     GPU UPTIME  AVAIL   STATE   IP/MASK             COLLECT CREATED/UPDATED                             STATUS_MESSAGE      BUNDLEDATE
+qzitmwnrwc  host5530U6  14qe3da13q   leader     MKE     23.0.9  3.8.7   -.-.--  swarm   kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  16      31.31   ... 16:09   active  ready   10.151.194.85 / 28  /System 2024-04-26_02:27:13 / 2025-12-10_15:07:34   Healthy MKE manager 03/06/2026
 
-cluster-001;host-001;node-001;leader ;MKE ;23.0.9;3.8.7;-.-.--;swarm ;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;16:09;active;ready;10.0.1.1/28;/System;2024-04-26 / 2025-12-10;Healthy MKE manager;03/06/2026
+qzitmwnrwc  host5531Q3  mu05shcfa9   manager    MKE     23.0.9  3.8.7   -.-.--  swarm   kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  16      31.31   ... 1 day   active  ready   10.151.194.83 / 28  /System 2024-04-27_05:36:40 / 2025-12-10_15:07:24   Healthy MKE manager 03/06/2026
 
-cluster-001;host-002;node-002;manager;MKE ;23.0.9;3.8.7;-.-.--;swarm ;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;1 day;active;ready;10.0.1.2/28;/System;2024-04-27 / 2025-12-10;Healthy MKE manager;03/06/2026
+qzitmwnrwc  host553YAC  xermmuhoip  manager     MKE     23.0.9;3.8.7    -.-.--  swarm   kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  12      31.31   ... 6:02    active  ready   10.151.194.84 / 28  /System 2024-04-26_02:39:47 / 2025-12-10_15:07:28   Healthy MKE manager 03/06/2026
 
-cluster-001;host-004;node-004;worker ;MCR ;23.0.9;3.8.7;-.-.--;------;kube  ;linux;Ubuntu-20.04.6;x86_64;VMware;16;31.31;...;1 day;active;ready;10.0.1.4/27;/Shared;2024-04-26 / 2025-12-09;Healthy MKE worker;03/06/2026
+qzitmwnrwc  host5533CO  t1j7ucm1id  worker      MCR     23.0.9;3.8.7    -.-.--  ------  kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  16      31.31   ... 1 day   active  ready   10.151.204.134 / 27 /Shared 2024-04-26_06:05:13 / 2025-12-09_22:59:07   Healthy MKE worker  03/06/2026
+
+qzitmwnrwc  host5539IU  in4v9k71lr  worker      MCR     23.0.9;3.8.7    -.-.--  ------  kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  16      31.31   ... 1 day   active  ready   10.151.204.132 / 27 /Shared 2024-04-27_05:41:28 / 2025-12-09_22:59:02   Healthy MKE worker  03/06/2026
+
+qzitmwnrwc  host553L9R  4q9v06f7yd  worker      MCR     23.0.9;3.8.7    -.-.--  ------  kube    linux   Ubuntu-20.04.6/ Ubuntu 20.04.6  x86_64  VMware  16      31.31   ... 6:54    active  ready   10.151.204.133 / 27 /Shared 2025-07-22_05:54:02 / 2025-12-10_08:14:10   Healthy MKE worker  03/06/2026
 ```
 
 </details>
