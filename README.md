@@ -1444,7 +1444,8 @@ To keep the extracted sosreport, remove this argument:
 ```
 </details>
 
-### SOS_TRIAGE Signature File Content & Example
+
+## SOS_TRIAGE Signature File Content & Example
 
 `sos_triage` uses a YAML signature file `sos-signatures.yaml` to define detectable patterns and interpretation rules.
 
