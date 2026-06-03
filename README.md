@@ -36,7 +36,8 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 | `sos_triage`         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ---
-## SDNODES.PY 🖥️
+ 🖥️
+## SDNODES.PY
 ---
 
 Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
@@ -143,7 +144,8 @@ options:
 </details>
 
 ---
-## PATTERNS_SEARCH.PY 🔍
+ 🔍
+## PATTERNS_SEARCH.PY
 ---
 
 
@@ -371,7 +373,8 @@ options:
 </details>
 
 ---
-## ETCD_ANALYSIS ⚙️
+ ⚙️
+## ETCD_ANALYSIS
 ---
 
 
@@ -1305,7 +1308,8 @@ reserved:
 
 
 ---
-## SOS_TRIAGE 📊
+ 📊
+## SOS_TRIAGE
 ---
 
 Analyzes sosreports with a strong emphasis on Mirantis products to produce a structured and deterministic RCA view into events.
