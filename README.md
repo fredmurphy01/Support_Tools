@@ -28,7 +28,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 | `sos_triage`         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ---
-🖥️
+## 🖥️
 ## SDNODES.PY
 ---
 
