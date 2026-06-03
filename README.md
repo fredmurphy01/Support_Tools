@@ -11,18 +11,10 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 ### Available Tools
 
 - [SDNODES.PY](#sdnodespy)
-- [PATTERNS_SEARCH.PY](-patterns_searchpy)
-- [BUNDLE_SANITIZE.PY](#-bundle_sanitizepy)
-- [ETCD_ANALYSIS](#️-etcd_analysis)
-- [SOS_TRIAGE](#-sos_triage)
-
-### Quick Navigation
-
-- [Available Tools](#available-tools)
-- [ETCD Signature File](#etcd-signature-file-content--example)
-- [SOS_TRIAGE Signature File](#sos_triage-signature-file-content--example)
-
-
+- [PATTERNS_SEARCH.PY](#patterns_searchpy)
+- [BUNDLE_SANITIZE.PY](#bundle_sanitizepy)
+- [ETCD_ANALYSIS](#️etcd_analysis)
+- [SOS_TRIAGE](#sos_triage)
 
 
 ## Available Tools
@@ -36,9 +28,10 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 | `sos_triage`         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ---
+🖥️
 ## SDNODES.PY
 ---
-🖥️
+
 Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
 
 > Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
