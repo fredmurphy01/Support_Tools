@@ -142,17 +142,18 @@ python3 tools/sdnodes.py \
 <summary>SDNODES Command Help</summary>
 
 ```text
-python3 tools/sdnodes.py -h
 
-usage: sdnodes.py [-h] [--pretty {0,1}] [--outputfile OUTPUTFILE]
-                  [--filesave {0,1}]
-                  ...
+python3 sdnodes.py --help
+usage: sdnodes.py [-h] [--pretty {0,1}] [--outputfile OUTPUTFILE] [--filesave {0,1}] [--accountname ACCOUNTNAME] [--ticketnumber TICKETNUMBER] [--bundlepath BUNDLEPATH] [--bundlefile BUNDLEFILE] [--bundledate BUNDLEDATE]
+                  [--bundlecreatedate BUNDLECREATEDATE] [--debug {0,1,2,3,4}] [--extended-output {0,1,2,3,4}] [--output-mode {engineer,ticket}] [--output-format {table,json}]
+
+{TOOL_NAME} Version: {VERSION} Command line input enabled with:
 
 options:
   -h, --help            show this help message and exit
   --pretty {0,1}        Set pretty level: 1=On (Default: no delimiters) 0=Off(Use a semicolon (;) as delimiter to enable import to spreadsheet)
   --outputfile OUTPUTFILE
-                        Output file name (e.g., test.csv) -- (default = nodes_output.csv), can have a fully qualified path and filename for placement (directory MUST exist), else placed into pwd
+                        Output file name/path. Default: nodes_output.csv for table output, nodes_output.json for JSON output. Can include a full path for placement; directory must already exist.
   --filesave {0,1}      Turn on saving to output file. Default=0 disabled. If enabled see --outputfile
   --accountname ACCOUNTNAME
                         Used to supply an Account Name if desired. Default = <undefined account name>. If using spaces in the Account Name be sure to enclose them in double quotes
@@ -160,12 +161,19 @@ options:
                         Used if you want to show output associated specifically with a ticket number. Default = 00000000
   --bundlepath BUNDLEPATH
                         Path to where support bundle resides. Default = .
+  --bundlefile BUNDLEFILE
+                        Path to where compressed (e.g. zip..) support bundle resides. Default = .
   --bundledate BUNDLEDATE
                         Simple date of support bundle. Format: dd/mm/YYYY Default=today
   --bundlecreatedate BUNDLECREATEDATE
                         Extended date of support bundle. Any string, preferred style: 2025-07-21T06:51:40.000Z Default = ''
-  --extended-output {0,1}
+  --debug {0,1,2,3,4}   Debug level: 0=off (default) up to 4=very verbose
+  --extended-output {0,1,2,3,4}
                         Extended output level: 0=baseline (default) up to 4=most detailed, for now if >= 1 then displays hardware info
+  --output-mode {engineer,ticket}
+                        Output mode: engineer=human terminal output with summary; ticket=clean semicolon-delimited ingestion output, useful for ingestion to such as Salesforce
+  --output-format {table,json}
+                        Output format: table=existing aligned/semicolon output; json=structured machine-readable JSON
 
 ```
 </details>
