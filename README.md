@@ -22,7 +22,53 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 ## SDNODES.PY
 ---
 
-Displays baseline cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
+Displays cluster information from an MKE3 cluster-wide support bundle with additional validation, guardrails, and reporting enhancements.
+Purpose:
+  Display node inventory and platform details from Docker / Mirantis support bundles, supporting:
+>    - Cluster-wide support bundles (ucp-nodes.txt)
+>    - Single-node support bundles (root-level dsinfo evidence)
+>    - Compressed support bundle archives (.zip/.tgz/.tar.gz/.tar.xz)
+
+  The tool is designed to operate as a standalone engineering utility with no external package dependencies, while also supporting structured output suitable for future Salesforce ingestion.
+
+  Primary audiences:
+    1. Engineers
+>      - Human-readable terminal table
+>      - Optional debug output
+>      - Summary statistics
+
+    2. Ticket / Salesforce ingestion
+>      - Clean semicolon-delimited output
+>      - Optional JSON output
+>      - No visual summary or console noise
+
+Major enhancements completed:
+
+  Bundle support
+  --------------
+    1. Added support for both cluster-wide and single-node support bundles.
+    2. Bundle detection now identifies:
+>      - cluster bundles
+>      - single-node bundles
+>      - unsupported layouts
+      with debug evidence describing the decision.
+    3. Added support for compressed support bundle archives:
+>        .zip
+>        .tgz
+>        .tar.gz
+>        .tar.xz
+>      including automatic secure extraction to a temporary directory.
+    4. Archive extraction is hardened against path traversal (Zip Slip / Tar Slip) attacks.
+    5. Output modes added:
+>          engineer
+>              Human-oriented table with summary information.
+>          ticket
+>              Clean ingestion output only.
+    6. Output formats added:
+>          table
+>              Existing aligned / semicolon renderer.
+>          json
+>              Structured machine-readable output.
 
 > Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
 
@@ -279,9 +325,12 @@ unable to look up Node Feature Discovery
 ```
 </details>
 ---
+
 [⬆ Back to Top](#top)
+
 ---
-## BUNDLE_SANITIZE.PY 🧹
+## ♻️
+## BUNDLE_SANITIZE.PY 
 ---
 
 

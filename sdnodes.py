@@ -1,34 +1,154 @@
 #!/usr/bin/env python3
-# SDNODES VERSION: 1.14
-# 
-# Purpose: To display cluster wide information about all nodes within.
-# 
-# Requirements:
-#    The application is generally to be run from inside the directory containing the extracted support bundle, where the file "ucp-nodes.txt" is located.
-#    NOTEWORTHY:
-#       You now have the ability to specify a support bundle directory rather than being pwd where bundle resides, see options below.
-#  
-# Fixes:
-#  Added >>> MASSIVE <<< error checking !!!!!!!  in order to prevent corrupted support bundles from causing program to terminate
-#  
-#  
-#  
-# Changes/ Enhancements:
-# ** Expanded output to include additional columns depending on command line inputs.
-# ** Added:  Specify a support bundle directory (rather than being pwd where bundle resides)
-# ** Added:  Add AccountName and/or TicketNumber and BundleDate to the output
-# ** Added:  Send console output directly to an output file (along with fully qualified path if desired)
-# ** Added:  Semicolon delimited output for importing into a spreadsheet (see pretty)
-# 
-# --pretty {0,1}              Set pretty level: 0=Off(default use a semicolon (;) as delimiter to import to spreadsheet), 1=On (no delimiters)
-# --outputfile OUTPUTFILE     Output file name (e.g., test.csv)  (default = nodes_output.csv), can have a fully qualified path for placement, else placed into pwd
-# --filesave {0,1}            Turn on saving to output file.  Default=0 disabled. If enabled see --outputfile
-# --accountname ACCOUNTNAME   Used to supply an Account Name if desired. Default = <undefined account name>. If using spaces in the Account Name be sure to enclose them in double quotes
-# --ticketnumber TICKETNUMBER Used if you want to show output associated specifically with a ticket number. Default = 00000000
-# --bundlepath BUNDLEPATH     Path to where support bundle resides. Default = .
-# --bundlecreatedate BUNDLECREATEDATE  Any string, preferred style: 2025-07-21T06:51:40.000Z
-# --extended-output int       Additional output, for now if >= 1 then displays hardware info
-# 
+#
+# Purpose:
+#   Display node inventory and platform details from Docker / Mirantis
+#   support bundles, supporting:
+#
+#     - Cluster-wide support bundles (ucp-nodes.txt)
+#     - Single-node support bundles (root-level dsinfo evidence)
+#     - Compressed support bundle archives (.zip/.tgz/.tar.gz/.tar.xz)
+#
+#   The tool is designed to operate as a standalone engineering utility
+#   with no external package dependencies, while also supporting
+#   structured output suitable for future Salesforce ingestion.
+#
+# Primary audiences:
+#   1. Engineers
+#        - Human-readable terminal table
+#        - Optional debug output
+#        - Summary statistics
+#
+#   2. Ticket / Salesforce ingestion
+#        - Clean semicolon-delimited output
+#        - Optional JSON output
+#        - No visual summary or console noise
+#
+# Major enhancements completed:
+#
+#   Bundle support
+#   --------------
+#   1. Added support for both cluster-wide and single-node support bundles.
+#   2. Bundle detection now identifies:
+#          - cluster bundles
+#          - single-node bundles
+#          - unsupported layouts
+#      with debug evidence describing the decision.
+#   3. Added support for compressed support bundle archives:
+#          .zip
+#          .tgz
+#          .tar.gz
+#          .tar.xz
+#      including automatic secure extraction to a temporary directory.
+#   4. Archive extraction is hardened against path traversal
+#      (Zip Slip / Tar Slip) attacks.
+#
+#   Robustness
+#   ----------
+#   5. Added BundleLoadError and centralized bundle loading.
+#   6. Added safe_read_json_file() and safe_int().
+#   7. getddcver() hardened against:
+#          - missing files
+#          - malformed JSON
+#          - missing Config/Env
+#          - malformed environment entries
+#          - missing version keys
+#   8. full_os_details_v1() hardened against malformed or missing:
+#          - uptime
+#          - OS release
+#          - kernel
+#          - hypervisor
+#          - manufacturer
+#          - interface/subnet information
+#   9. process_nodes() skips malformed node records instead of aborting
+#      the entire run whenever possible.
+#  10. Invalid or unsupported bundles now terminate cleanly with exit code 2.
+#
+#   Architecture
+#   ------------
+#  11. Path handling migrated toward pathlib and bundle_root_path()
+#      instead of fragile string concatenation.
+#  12. Bundle loading centralized through:
+#          load_cluster_nodes()
+#          load_single_node()
+#          cli_main()
+#  13. Archive preparation is isolated behind prepare_bundle_input(),
+#      allowing callers to supply either an extracted directory or a
+#      compressed archive transparently.
+#
+#   Output
+#   ------
+#  14. Output modes added:
+#
+#          engineer
+#              Human-oriented table with summary information.
+#
+#          ticket
+#              Clean ingestion output only.
+#
+#  15. Output formats added:
+#
+#          table
+#              Existing aligned / semicolon renderer.
+#
+#          json
+#              Structured machine-readable output.
+#
+# CLI options:
+#
+#   --pretty {0,1}
+#       1 = human-readable aligned table.
+#       0 = semicolon-delimited rows.
+#       In --output-mode ticket, pretty is forced off.
+#
+#   --output-mode {engineer,ticket}
+#       engineer = terminal-friendly output with summary block.
+#       ticket   = clean ingestion output only; suppresses summary/noise.
+#
+#   --output-format {table,json}
+#       table = existing aligned/semicolon table renderer.
+#       json  = structured machine-readable JSON renderer.
+#
+#   --filesave {0,1}
+#       0 = write to stdout only.
+#       1 = also write output to --outputfile.
+#
+#   --outputfile OUTPUTFILE
+#       Output filename/path when --filesave=1.
+#       Default:
+#           nodes_output.csv
+#           nodes_output.json
+#
+#   --accountname ACCOUNTNAME
+#       Optional account name column.
+#
+#   --ticketnumber TICKETNUMBER
+#       Optional ticket/case number column.
+#
+#   --bundlepath BUNDLEPATH
+#       Path to an extracted support bundle.
+#
+#   --bundlefile BUNDLEFILE
+#       Path to a compressed support bundle archive.
+#
+#   --bundledate DD/MM/YYYY
+#       Scan / bundle date.
+#
+#   --bundlecreatedate STRING
+#       Original bundle creation timestamp.
+#
+#   --extended-output {0,1,2,3,4}
+#       Extended output level.
+#
+#   --debug {0,1,2,3,4}
+#       Debug verbosity.
+#
+# Exit behaviour:
+#
+#   0   Success.
+#   2   Invalid, unreadable or unsupported bundle.
+#   130 Interrupted by user.
+#
+
 
 import json
 import os
@@ -42,9 +162,13 @@ import sys
 from pathlib import Path
 import argparse
 import time
+import zipfile
+import tarfile
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+import  tempfile
+
 
 @dataclass(frozen=True)
 class Options:
@@ -54,54 +178,506 @@ class Options:
     accountname: str
     ticketnumber: str
     bundlepath: str
+    bundlefile: str
     bundledate: str
     extended_output: int
     debug: int
+    output_mode: str
+    output_format: str
 
 
+@dataclass(frozen=True)
+class NodeRowsResult:
+    header_cols: list[str]
+    rows: list[tuple]
+    stats: dict
+    bundle_mode: str
 
-
-
-
+#------------------------------------------------------------
+# Purpose:
+#   Write debug or warning messages to stderr only when the
+#   selected debug level is high enough.
+#------------------------------------------------------------
 def debug_print(level_required: int, current_level: int, msg: str) -> None:
     """Print debug message to stderr if current_level >= level_required."""
     if current_level >= level_required:
         print(msg, file=sys.stderr)
 
 ucp_nodes = 'ucp-nodes.txt'
+BUNDLE_MODE_CLUSTER = "cluster"
+BUNDLE_MODE_SINGLE = "single"
+BUNDLE_MODE_UNKNOWN = "unknown"
+VERSION = "1.25"
+TOOL_NAME = "SDNODES"
 
+#------------------------------------------------------------
+# Purpose:
+#   Detect whether the supplied support bundle is a cluster-wide
+#   bundle, single-node bundle, or an unsupported layout.
+#
+# Returns:
+#   BUNDLE_MODE_CLUSTER
+#   BUNDLE_MODE_SINGLE
+#   BUNDLE_MODE_UNKNOWN
+#------------------------------------------------------------
+def detect_bundle_mode(bundle_path: str, debug_level: int = 0) -> str:
+    root = bundle_root_path(bundle_path)
 
+    if not root.exists() or not root.is_dir():
+        debug_print(1, debug_level, f"[warn] bundle path does not exist or is not a directory: {root}")
+        return BUNDLE_MODE_UNKNOWN
 
+    has_ucp_nodes = (root / "ucp-nodes.txt").is_file()
+    has_root_dsinfo_json = (root / "dsinfo" / "dsinfo.json").is_file()
+    has_root_dsinfo_txt = (root / "dsinfo" / "dsinfo.txt").is_file()
+    has_root_inspect = (root / "dsinfo" / "inspect").is_dir()
 
+    if has_ucp_nodes:
+        debug_print(2, debug_level, f"[info] detected cluster bundle: found {root / 'ucp-nodes.txt'}")
+        return BUNDLE_MODE_CLUSTER
 
-#---------------------------
-# This method simply finds a file and returns directory and file name(s)
-#---------------------------
+    single_score = sum([
+        has_root_dsinfo_json,
+        has_root_dsinfo_txt,
+        has_root_inspect,
+    ])
+
+    if has_root_dsinfo_json and single_score >= 2:
+        debug_print(2, debug_level, f"[INFO] detected single-node bundle: dsinfo evidence score={single_score}/3")
+        return BUNDLE_MODE_SINGLE
+
+    if has_root_dsinfo_json:
+        debug_print(1, debug_level, f"[WARN] dsinfo.json found but single-node evidence is weak: score={single_score}/3")
+        return BUNDLE_MODE_SINGLE
+
+    debug_print(2, debug_level, f"[WARN] unsupported bundle layout: {root}")
+    return BUNDLE_MODE_UNKNOWN
+
+#------------------------------------------------------------
+# Purpose:
+#   Normalize the user-supplied bundle path into a Path object
+#   so later code can build paths safely and consistently.
+#
+# Returns:
+#   Path object for the bundle root.
+#------------------------------------------------------------
+def bundle_root_path(bundle_path: str) -> Path:
+    """
+    Normalize bundle_path into a Path object.
+
+    Keeps legacy '.' behavior, but gives the rest of the code one safe
+    path-joining style instead of string concatenation.
+    """
+    return Path(bundle_path or ".")
+
+class BundleLoadError(Exception):
+    pass
+
+#------------------------------------------------------------
+# Purpose:
+#   Determine whether a supplied bundle file is a supported
+#   archive type.
+#
+# Returns:
+#   "zip"
+#   "tar"
+#   "unknown"
+#------------------------------------------------------------
+def detect_archive_type(path: Path) -> str:
+
+    if zipfile.is_zipfile(path):
+        return "zip"
+
+    if tarfile.is_tarfile(path):
+        return "tar"
+
+    return "unknown"
+
+#------------------------------------------------------------
+# Purpose:
+#   Validate that an archive member can be safely extracted
+#   under the intended extraction directory.
+#
+#   This protects against archive entries such as:
+#     ../../etc/passwd
+#     /absolute/path/file
+#
+# Returns:
+#   True if safe, False otherwise.
+#------------------------------------------------------------
+def is_safe_archive_member(member_name: str, extract_root: Path) -> bool:
+
+    if not member_name:
+        return False
+
+    member_path = Path(member_name)
+
+    if member_path.is_absolute():
+        return False
+
+    target_path = (extract_root / member_path).resolve()
+    extract_root_resolved = extract_root.resolve()
+
+    try:
+        target_path.relative_to(extract_root_resolved)
+    except ValueError:
+        return False
+
+    return True
+
+#------------------------------------------------------------
+# Purpose:
+#   Detect ZIP entries that represent symbolic links by reading
+#   the Unix file mode stored in external_attr when present.
+#
+# Returns:
+#   True when the ZIP member appears to be a symbolic link.
+#------------------------------------------------------------
+def is_zip_symlink(member: zipfile.ZipInfo) -> bool:
+
+    unix_mode = member.external_attr >> 16
+    return (unix_mode & 0o170000) == 0o120000
+#------------------------------------------------------------
+# Purpose:
+#   Safely extract a ZIP archive into the supplied extraction
+#   directory after validating every member path.
+#
+# Returns:
+#   None
+#
+# Raises:
+#   BundleLoadError if the archive contains an unsafe path or
+#   extraction fails.
+#------------------------------------------------------------
+def safe_extract_zip(archive_path: Path, extract_root: Path) -> int:
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            members = zf.infolist()
+
+            for member in members:
+                if not is_safe_archive_member(member.filename, extract_root):
+                    raise BundleLoadError(
+                        f"Unsafe path found in ZIP archive: {member.filename}"
+                    )
+
+                if is_zip_symlink(member):
+                    raise BundleLoadError(
+                        f"Unsafe symbolic link found in ZIP archive: {member.filename}"
+                    )
+
+            zf.extractall(extract_root)
+            return len(members)
+
+    except BundleLoadError:
+        raise
+
+    except Exception as e:
+        raise BundleLoadError(
+            f"Failed to extract ZIP archive {archive_path}: {e}"
+        )
+#------------------------------------------------------------
+# Purpose:
+#   Safely extract a TAR archive into the supplied extraction
+#   directory after validating every member path.
+#   automatically detects:
+#   .tar
+#   .tar.gz
+#   .tgz
+#   .tar.bz2
+#   .tbz
+#   .tar.xz
+#   .txz
+#   So we don't need to care what extension the customer used. Python just inspects the archive itself.
+#
+# Returns:
+#   None
+#
+# Raises:
+#   BundleLoadError if the archive contains an unsafe path or
+#   extraction fails.
+#------------------------------------------------------------
+def safe_extract_tar(archive_path: Path, extract_root: Path) -> int:
+
+    try:
+        with tarfile.open(archive_path, "r:*") as tf:
+            members = tf.getmembers()
+
+            for member in members:
+                if not is_safe_archive_member(member.name, extract_root):
+                    raise BundleLoadError(
+                        f"Unsafe path found in TAR archive: {member.name}"
+                    )
+
+                if member.issym() or member.islnk():
+                    raise BundleLoadError(
+                        f"Unsafe link found in TAR archive: {member.name} -> {member.linkname}"
+                    )
+
+            tf.extractall(extract_root)
+            return len(members)
+
+    except BundleLoadError:
+        raise
+
+    except Exception as e:
+        raise BundleLoadError(
+            f"Failed to extract TAR archive {archive_path}: {e}"
+        )
+#------------------------------------------------------------
+# Purpose:
+#   Extract a supported bundle archive into a controlled
+#   extraction directory.
+#
+# Returns:
+#   Path object for the directory that received extracted content.
+#
+# Raises:
+#   BundleLoadError if archive type is unsupported or extraction
+#   fails.
+#------------------------------------------------------------
+def extract_bundle_archive(archive_path: Path, extract_root: Path) -> int:
+
+    archive_type = detect_archive_type(archive_path)
+
+    if archive_type == "zip":
+        return safe_extract_zip(archive_path, extract_root)
+
+    if archive_type == "tar":
+        return safe_extract_tar(archive_path, extract_root)
+
+    raise BundleLoadError(
+        f"Unsupported bundle archive format: {archive_path}"
+    )
+#------------------------------------------------------------
+# Purpose:
+#   Locate the actual support bundle root after archive extraction.
+#
+#   Archives may extract as:
+#     extracted/ucp-nodes.txt
+#     extracted/docker-support-abc/ucp-nodes.txt
+#     extracted/dsinfo/dsinfo.json
+#     extracted/docker-support-abc/dsinfo/dsinfo.json
+#
+# Returns:
+#   Path object for the detected bundle root.
+#
+# Raises:
+#   BundleLoadError if no supported bundle root is found.
+#------------------------------------------------------------
+def find_extracted_bundle_root(extract_root: Path, debug_level: int = 0) -> Path:
+
+    candidate_roots = [extract_root]
+
+    for path in extract_root.rglob("*"):
+        if path.is_dir():
+            candidate_roots.append(path)
+
+    valid_roots = []
+
+    for candidate in candidate_roots:
+        mode = detect_bundle_mode(str(candidate), debug_level)
+
+        if mode in (BUNDLE_MODE_CLUSTER, BUNDLE_MODE_SINGLE):
+            valid_roots.append((candidate, mode))
+
+    if not valid_roots:
+        raise BundleLoadError(
+            f"No supported bundle root found after archive extraction: {extract_root}"
+        )
+
+    if len(valid_roots) > 1:
+        root_list = ", ".join(str(path) for path, _mode in valid_roots)
+        raise BundleLoadError(
+            f"Multiple supported bundle roots found after archive extraction; refusing to choose arbitrarily: {root_list}"
+        )
+
+    bundle_root, mode = valid_roots[0]
+    debug_print(
+        1,
+        debug_level,
+        f"[info] detected extracted bundle root: {bundle_root} ({mode})"
+    )
+    return bundle_root
+#------------------------------------------------------------
+# Purpose:
+#   Prepare the supplied support bundle input for processing.
+#
+#   Directory input is returned as-is after path normalization.
+#   Archive input is extracted into the supplied temporary root,
+#   then normalized to the actual bundle root directory.
+#
+# Returns:
+#   Path object representing the bundle root directory.
+#
+# Raises:
+#   BundleLoadError when archive input cannot be extracted or
+#   no supported bundle root can be found after extraction.
+#------------------------------------------------------------
+def prepare_bundle_input(opts: Options, temp_root: Path | None = None) -> Path:
+
+    if opts.bundlefile:
+
+        if temp_root is None:
+            raise BundleLoadError(
+                "Internal error: archive input requires a temporary extraction directory."
+            )
+
+        archive_path = Path(opts.bundlefile)
+
+        if not archive_path.is_file():
+            raise BundleLoadError(
+                f"Bundle archive does not exist or is not a file: {archive_path}"
+            )
+
+        archive_type = detect_archive_type(archive_path)
+
+        if archive_type == "unknown":
+            raise BundleLoadError(
+                f"Unsupported bundle archive format: {archive_path}"
+            )
+
+        extract_root = temp_root / "extracted"
+        extract_root.mkdir(parents=True, exist_ok=True)
+
+        member_count = extract_bundle_archive(archive_path, extract_root)
+
+        bundle_root = find_extracted_bundle_root(extract_root, opts.debug)
+
+        debug_print(
+            1,
+            opts.debug,
+            f"[info] archive input: type={archive_type} file={archive_path.name} members={member_count} extraction_dir={extract_root} bundle_root={bundle_root}"
+        )
+
+        return bundle_root
+
+    return bundle_root_path(opts.bundlepath)
+#------------------------------------------------------------
+# Purpose:
+#   Read a JSON file safely, report failures through debug output,
+#   and optionally treat the file as required.
+#
+# Returns:
+#   Parsed JSON data, or the supplied default value.
+#
+# Raises:
+#   BundleLoadError when required=True and the file cannot be read
+#   or parsed.
+#------------------------------------------------------------
+def safe_read_json_file(path: Path, debug_level: int = 0, required: bool = False, default=None):
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as r:
+            return json.load(r)
+    except Exception as e:
+        debug_print(1, debug_level, f"[warn] failed to read JSON {path}: {e}")
+        if required:
+            raise BundleLoadError(f"Required JSON file is missing or invalid: {path}")
+        return default
+
+#------------------------------------------------------------
+# Purpose:
+#   Convert a value to an integer without allowing bad or missing
+#   data to interrupt bundle processing.
+#
+# Returns:
+#   Converted integer, or the supplied default value.
+#------------------------------------------------------------
+def safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+#------------------------------------------------------------
+# Purpose:
+#   Search a directory tree for the first file matching the
+#   supplied filename or wildcard pattern.
+#
+# Returns:
+#   Full matching path as a string, or None if not found.
+#------------------------------------------------------------
 def findfile(topdir, f_glob):
     for d_name, sd_name, f_list in os.walk(topdir):
         for f_name in f_list:
             if fnmatch.fnmatch(f_name, f_glob):
                 return os.path.join(d_name, f_name)
 
-#-----------------------------
-# This method will search for a specific file, or wildcard file, for a specific host (directory) which contains a specific string
-# Very specific for support bundles and not generic enough otherwise
-#-----------------------------
-def getddcver(nodename,f_glob,k):
-    f = findfile(nodename,f_glob)
-    if f == None:
-        return '-'
-    else:
-        with open(f, 'r') as r:
-            j = json.load(r)
-        env = j[0]['Config']['Env']
-        imgverstr = [s for s in env if k in s]
-        imgver = imgverstr[0].split('=')[1]
-        return imgver
+#------------------------------------------------------------
+# Purpose:
+#   Read a Docker inspect JSON file and extract a specific
+#   environment variable such as IMAGE_VERSION or DTR_VERSION.
+#
+# Returns:
+#   Requested version string, or '-' if unavailable.
+#------------------------------------------------------------
+def getddcver(nodename, f_glob, k, debug_level=0):
+    """
+    Return container image/env version value from docker inspect JSON.
 
-# --------------------------------------
-# This method prints to console and also an output file if specified.
-#---------------------------------------
+    Expected shape:
+      [
+        {
+          "Config": {
+            "Env": [
+              "IMAGE_VERSION=3.8.14",
+              "DTR_VERSION=2.9.23"
+            ]
+          }
+        }
+      ]
+
+    Safe fallback:
+      '-' for missing file, invalid JSON, unexpected shape, missing Env,
+      missing key, or malformed env entries.
+    """
+    f = findfile(nodename, f_glob)
+    if not f:
+        debug_print(2, debug_level, f"[warn] getddcver: no file found for {f_glob} under {nodename}")
+        return "-"
+
+    try:
+        with open(f, "r", encoding="utf-8", errors="ignore") as r:
+            j = json.load(r)
+    except Exception as e:
+        debug_print(1, debug_level, f"[warn] getddcver: failed to read/parse JSON {f}: {e}")
+        return "-"
+
+    if not isinstance(j, list) or not j:
+        debug_print(1, debug_level, f"[warn] getddcver: unexpected JSON shape in {f}; expected non-empty list")
+        return "-"
+
+    first = j[0]
+    if not isinstance(first, dict):
+        debug_print(1, debug_level, f"[warn] getddcver: first JSON item is not an object in {f}")
+        return "-"
+
+    config = first.get("Config")
+    if not isinstance(config, dict):
+        debug_print(1, debug_level, f"[warn] getddcver: Config missing/not object in {f}")
+        return "-"
+
+    env = config.get("Env")
+    if not isinstance(env, list):
+        debug_print(1, debug_level, f"[warn] getddcver: Config.Env missing/not list in {f}")
+        return "-"
+
+    prefix = f"{k}="
+    for item in env:
+        if not isinstance(item, str):
+            continue
+        if item.startswith(prefix):
+            value = item.split("=", 1)[1].strip()
+            return value if value else "-"
+
+    debug_print(2, debug_level, f"[warn] getddcver: {k}= not found in {f}")
+    return "-"
+
+#------------------------------------------------------------
+# Purpose:
+#   Render one output row to stdout and, when requested, also
+#   write that same row to the configured output file.
+#------------------------------------------------------------
 def row_print2(row, widths, outfile=None, *, pretty: bool = True, sep: str = "  "):
     """Render one row to stdout, and optionally to a file handle.
 
@@ -112,20 +688,99 @@ def row_print2(row, widths, outfile=None, *, pretty: bool = True, sep: str = "  
     """
     # Ensure we always stringify values (None-safe)
     cells = ["" if v is None else str(v) for v in row]
-    # Pad each cell (left-aligned) to its column width
-    padded = [f"{cells[i]:<{widths[i]}}" for i in range(min(len(cells), len(widths)))]
-    # If for some reason there are more cells than widths, append unpadded
-    if len(cells) > len(widths):
-        padded.extend(cells[len(widths):])
-
-    line = sep.join(padded) if pretty else ";".join(padded)
+    if pretty:
+        # Pad each cell (left-aligned) to its column width for terminal readability.
+        padded = [f"{cells[i]:<{widths[i]}}" for i in range(min(len(cells), len(widths)))]
+        # If for some reason there are more cells than widths, append unpadded.
+        if len(cells) > len(widths):
+            padded.extend(cells[len(widths):])
+        line = sep.join(padded)
+    else:
+        # Machine/spreadsheet output: no visual padding inside delimited fields.
+        line = ";".join(cell.strip() for cell in cells)
 
     print(line, flush=True)
     if outfile is not None:
         outfile.write(line + "\n")
         outfile.flush()
 
+#------------------------------------------------------------
+# Purpose:
+#   Safely extract text that appears after a known marker within
+#   a line of text.
+#
+# Returns:
+#   Text after the marker, or the supplied default value.
+#------------------------------------------------------------
+def value_after_marker(line: str, marker: str, default: str = "") -> str:
+    """
+    Return text after marker if present, else default.
+    Safe replacement for split(marker)[1].
+    """
+    if marker not in line:
+        return default
+    return line.split(marker, 1)[1].strip()
 
+#------------------------------------------------------------
+# Purpose:
+#   Safely extract text that appears after the first colon in a
+#   line of text.
+#
+# Returns:
+#   Text after the colon, or the supplied default value.
+#------------------------------------------------------------
+def value_after_colon(line: str, default: str = "") -> str:
+    """
+    Return text after the first colon.
+    Handles both ': ' and ':' safely.
+    """
+    if ":" not in line:
+        return default
+    return line.split(":", 1)[1].strip()
+
+#------------------------------------------------------------
+# Purpose:
+#   Parse Linux os-release assignment lines such as NAME= or
+#   VERSION= while handling quoted and unquoted values.
+#
+# Returns:
+#   Parsed value, or the supplied default value.
+#------------------------------------------------------------
+def parse_os_release_assignment(line: str, key: str, default: str = "") -> str:
+    """
+    Safely parse NAME=..., VERSION=..., VERSION_ID=... style lines.
+    Handles quoted and unquoted values.
+    """
+    prefix = f"{key}="
+    if not line.startswith(prefix):
+        return default
+
+    value = line.split("=", 1)[1].strip()
+    value = value.strip('"').strip("'").strip()
+    return value or default
+
+#------------------------------------------------------------
+# Purpose:
+#   Extract the first whitespace-delimited token from a string.
+#
+# Returns:
+#   First token, or the supplied default value.
+#------------------------------------------------------------
+def first_token(value: str, default: str = "") -> str:
+    """
+    Return first whitespace-delimited token from a string.
+    """
+    parts = value.split()
+    return parts[0] if parts else default
+
+#------------------------------------------------------------
+# Purpose:
+#   Inspect kube-describe-nodes output for one node and determine
+#   whether it reports an allocated nvidia.com/gpu resource.
+#
+# Returns:
+#   1 when GPU allocation is detected, 0/None otherwise.
+#------------------------------------------------------------
 def parse_node_gpu_flag(path: str, target_nodename: str):
     """
     Scan a kubectl-describe-nodes output file and, for the section whose
@@ -174,116 +829,321 @@ def parse_node_gpu_flag(path: str, target_nodename: str):
 
         return gpu_flag
 
-# --------------------------------------
-# This method calculates and returns full_os_text, hypervisor, node uptime, subnet mask, node_kernel
-#---------------------------------------
-def full_os_details_v1(hostname, ip_add, bundle_path, debug_level):
-    dsi_os = "NoInfo "   ## docker system info result, setting a default value
-    
-    if bundle_path != '.':
-        dir_to_search = bundle_path
-        dir_to_search += hostname 
-    else:
-        dir_to_search = hostname 
-    node_dsinfo_filename = os.path.join(dir_to_search, "dsinfo", "dsinfo.txt")
-
-    os_type = "?"        # from cat /etc/os-* down in the file dsinfo.txt 
-    os_version = "NA"   # from cat /etc/os-* down in the file dsinfo.txt 
-    uptime = 'NoInfo'  # setting a default value, in case we do not find it in the dsinfo.txt file
-    full_os_text = os_type + '-' + os_version + ' / ' + dsi_os  # Generally we should be able to improve this initial default value
-    hpv = mask = cpus = ram = ' ??   '
-    manu = fam = pname = '...Unknown...'
-    ip_match = ' inet ' + ip_add
+#------------------------------------------------------------
+# Purpose:
+#   Read dsinfo.txt for a node and derive operating system,
+#   hypervisor, uptime, subnet mask, kernel and hardware details.
+#
+# Returns:
+#   Tuple of OS text, hypervisor, uptime, subnet mask, kernel,
+#   manufacturer, product name and family.
+#------------------------------------------------------------
+def full_os_details_v1(hostname, ip_add, bundle_path, debug_level, bundle_mode):
+    dsi_os = "NoInfo "
+    os_type = "?"
+    os_version = "NA"
+    uptime = "NoInfo"
+    hpv = mask = " ??   "
+    manu = fam = pname = "...Unknown..."
     node_kernel = ""
     kernel_version = ""
 
-    try:      ## after setting some default values, we see what the dsinfo.txt file has
-        with open(node_dsinfo_filename, 'r') as inf:
-            for line in inf:
-                line = line.lstrip()
-                if line.startswith("Operating System: "):
-                    dsi_os = line.split(': ')[1].strip()
-                    if dsi_os.lower().startswith('windows'):
-                        dsi_os = dsi_os.split()[-1].strip(')')
-                        break # no more info to be found in the restricted dsinfo.txt file for windows workers
-                    if dsi_os.lower().startswith('suse'):
-                        dsi_os = dsi_os.replace(' Linux Enterprise Server ','-')
-                    if dsi_os.lower().startswith('red hat'):
-                        if '.' in dsi_os:
-                            dot_pos = dsi_os.find('.')
-                            version = dsi_os[dot_pos - 1] + dsi_os[dot_pos + 1]
-                            dsi_os = 'RHEL' + version
-                        else:
-                            dsi_os = 'RHEL'
-                    if dsi_os.lower().startswith('rhel') :
-                        dsi_os = 'RHEL'
-                    if dsi_os.lower().startswith('centos'):
-                        dsi_os = dsi_os.replace(' Linux ', '').rstrip('(Core)')
-                    if dsi_os.lower().startswith('ubuntu'):
-                        dsi_os = dsi_os.rstrip('LTS') 
-                    if dsi_os.lower().startswith('oracle'):
-                        dsi_os = dsi_os.replace(' Linux Server ','')
-                    if dsi_os.lower().startswith('openshift'):
-                        dsi_os = 'OpenShift'
-                    continue
-                if line.startswith("Kernel Version: "):
-                    kernel_version = line.split(': ')[1].strip()
-                    
-                    continue
-                ## further down the file we will start reading those lines (only for linux nodes!): 
-                if line.startswith("Linux version "):
-                    node_kernel = line.split()[2]
-                    continue 
-                if 'load average:' in line:
-                    uptime = (line.split('up ')[1]).split(',')[0]
-                    continue
-                if line.startswith("NAME="):
-                    os_type = line.split('="')[1].strip().strip('"')
-                    if os_type.startswith("Red"):
-                        os_type = "RHEL"         ## Just to make the output a little shorter
-                    continue
-                if line.startswith("VERSION="):
-                    os_version = line.split('="')[1].strip('"').split()[0].strip('"')
-                    continue 
-                # but sometimes just a few lines later, we may encounter the correct info:
-                if line.startswith('CentOS Linux release '):
-                    os_type = 'Centos'
-                    os_version = line.split()[3]
-                    continue 
-                if line.startswith('Red Hat Enterprise Linux release '):
-                    os_type = 'Rhel'
-                    os_version = line.split()[5]
-                    continue 
-                if line.startswith("Hypervisor vendor: "):
-                    hpv = line.split(': ')[1].strip()
-                    continue    
-                if line.startswith("Manufacturer: "):
-                    manu = line.split(': ')[1].strip()
-                    continue
-                if line.startswith("Product Name: "):
-                    pname = line.split(': ')[1].strip()
-                    continue
-                if line.startswith("Family: "):
-                    fam = line.split(': ')[1].strip()
-                    continue       
-                if ip_match in line:
-                    try:           # we will just try to set the subnet-mask and stop reading the file
-                        mask = line.split()[3].split('/')[1]
-                    except :   # for the rare cases that the line will be malformed, still return a mask ??
-                        pass # mask = '??'  # the initaly set value of mask is ?? already
-                    break        # nothing else to look for in the dsinfo.txt file, we can stop reading its lines
-            full_os_text = os_type + '-' + os_version + '/ ' + dsi_os
-            debug_print(2, debug_level, f"...kernel_version={kernel_version}  node_kernel={node_kernel}")
-            #return full_os_text, hpv, uptime, mask, node_kernel, manu, pname, fam
-            return full_os_text, hpv, uptime, mask, kernel_version, manu, pname, fam
+    root = bundle_root_path(bundle_path)
 
-    except FileNotFoundError:        # for nodes that the SD did not gather info, at least return the default values
+    if bundle_mode == BUNDLE_MODE_SINGLE:
+        node_dsinfo_filename = root / "dsinfo" / "dsinfo.txt"
+    else:
+        node_dsinfo_filename = root / hostname / "dsinfo" / "dsinfo.txt"
+
+    full_os_text = os_type + "-" + os_version + " / " + dsi_os
+    ip_match = " inet " + str(ip_add)
+
+    try:
+        with open(node_dsinfo_filename, "r", encoding="utf-8", errors="ignore") as inf:
+            for raw_line in inf:
+                line = raw_line.lstrip()
+
+                if line.startswith("Operating System:"):
+                    parsed = value_after_colon(line, dsi_os)
+                    if parsed:
+                        dsi_os = parsed
+
+                    dsi_os_lower = dsi_os.lower()
+
+                    if dsi_os_lower.startswith("windows"):
+                        parts = dsi_os.split()
+                        if parts:
+                            dsi_os = parts[-1].strip(")")
+                        break
+
+                    if dsi_os_lower.startswith("suse"):
+                        dsi_os = dsi_os.replace(" Linux Enterprise Server ", "-")
+                    elif dsi_os_lower.startswith("red hat"):
+                        if "." in dsi_os:
+                            dot_pos = dsi_os.find(".")
+                            if dot_pos > 0 and dot_pos + 1 < len(dsi_os):
+                                version = dsi_os[dot_pos - 1] + dsi_os[dot_pos + 1]
+                                dsi_os = "RHEL" + version
+                            else:
+                                dsi_os = "RHEL"
+                        else:
+                            dsi_os = "RHEL"
+                    elif dsi_os_lower.startswith("rhel"):
+                        dsi_os = "RHEL"
+                    elif dsi_os_lower.startswith("centos"):
+                        dsi_os = dsi_os.replace(" Linux ", "").rstrip("(Core)")
+                    elif dsi_os_lower.startswith("ubuntu"):
+                        dsi_os = dsi_os.rstrip("LTS").strip()
+                    elif dsi_os_lower.startswith("oracle"):
+                        dsi_os = dsi_os.replace(" Linux Server ", "")
+                    elif dsi_os_lower.startswith("openshift"):
+                        dsi_os = "OpenShift"
+
+                    continue
+
+                if line.startswith("Kernel Version:"):
+                    kernel_version = value_after_colon(line, kernel_version)
+                    continue
+
+                if line.startswith("Linux version "):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        node_kernel = parts[2]
+                    else:
+                        debug_print(2, debug_level, f"[warn] full_os_details: malformed Linux version line in {node_dsinfo_filename}: {line.strip()}")
+                    continue
+
+                if "load average:" in line:
+                    if "up " in line:
+                        uptime = value_after_marker(line, "up ", uptime)
+                        uptime = uptime.split(",", 1)[0].strip()
+                        if re.fullmatch(r"\d+:\d{2}", uptime):
+                            uptime = f"0 days {uptime}"
+                    else:
+                        debug_print(2, debug_level, f"[warn] full_os_details: load average line has no 'up ' marker in {node_dsinfo_filename}")
+                    continue
+
+                if line.startswith("NAME="):
+                    parsed = parse_os_release_assignment(line, "NAME", os_type)
+                    if parsed:
+                        os_type = parsed
+                        if os_type.startswith("Red"):
+                            os_type = "RHEL"
+                    continue
+
+                if line.startswith("VERSION="):
+                    parsed = parse_os_release_assignment(line, "VERSION", os_version)
+                    if parsed:
+                        os_version = first_token(parsed, os_version)
+                    continue
+
+                if line.startswith("CentOS Linux release "):
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        os_type = "Centos"
+                        os_version = parts[3]
+                    else:
+                        debug_print(2, debug_level, f"[warn] full_os_details: malformed CentOS release line in {node_dsinfo_filename}: {line.strip()}")
+                    continue
+
+                if line.startswith("Red Hat Enterprise Linux release "):
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        os_type = "Rhel"
+                        os_version = parts[5]
+                    else:
+                        debug_print(2, debug_level, f"[warn] full_os_details: malformed RHEL release line in {node_dsinfo_filename}: {line.strip()}")
+                    continue
+
+                if line.startswith("Hypervisor vendor:"):
+                    hpv = value_after_colon(line, hpv)
+                    continue
+
+                if line.startswith("Manufacturer:"):
+                    manu = value_after_colon(line, manu)
+                    continue
+
+                if line.startswith("Product Name:"):
+                    pname = value_after_colon(line, pname)
+                    continue
+
+                if line.startswith("Family:"):
+                    fam = value_after_colon(line, fam)
+                    continue
+
+                if ip_match in line:
+                    parts = line.split()
+                    if len(parts) >= 4 and "/" in parts[3]:
+                        mask_candidate = parts[3].split("/", 1)[1].strip()
+                        if mask_candidate:
+                            mask = mask_candidate
+                    else:
+                        debug_print(2, debug_level, f"[warn] full_os_details: malformed interface line for {ip_add} in {node_dsinfo_filename}: {line.strip()}")
+                    break
+
+        full_os_text = os_type + "-" + os_version + "/ " + dsi_os
+        debug_print(2, debug_level, f"...kernel_version={kernel_version}  node_kernel={node_kernel}")
+        return full_os_text, hpv, uptime, mask, kernel_version, manu, pname, fam
+
+    except FileNotFoundError:
+        debug_print(1, debug_level, f"[warn] full_os_details: dsinfo.txt not found: {node_dsinfo_filename}")
         return full_os_text, hpv, uptime, mask, node_kernel, manu, pname, fam
 
-#---------------------------
-# This method processes all the nodes
-#---------------------------
-def getnodes(f: str , opts: Options):
+    except Exception as e:
+        debug_print(1, debug_level, f"[warn] full_os_details: failed reading {node_dsinfo_filename}: {e}")
+        return full_os_text, hpv, uptime, mask, node_kernel, manu, pname, fam
+
+#------------------------------------------------------------
+# Purpose:
+#   Load the cluster node inventory from ucp-nodes.txt and verify
+#   that the parsed JSON is a list.
+#
+# Returns:
+#   List of cluster node records.
+#
+# Raises:
+#   BundleLoadError if the inventory is missing, invalid or not a
+#   JSON list.
+#------------------------------------------------------------
+def load_cluster_nodes(f: str, debug_level: int = 0) -> list:
+    path = Path(f)
+
+    data = safe_read_json_file(path, debug_level, required=True, default=[])
+
+    if not isinstance(data, list):
+        raise BundleLoadError(f"Cluster node inventory is not a JSON list: {path}")
+
+    return data
+
+#------------------------------------------------------------
+# Purpose:
+#   Load a single-node support bundle and construct a synthetic
+#   node record compatible with the cluster processing pipeline.
+#
+# Returns:
+#   List containing one synthetic node record.
+#
+# Raises:
+#   BundleLoadError if required single-node JSON is missing or
+#   malformed.
+#------------------------------------------------------------
+def load_single_node(bundle_path: str, debug_level: int = 0) -> list:
+
+    root = Path(bundle_path)
+    dsinfo_json_path = root / "dsinfo" / "dsinfo.json"
+
+    dsinfo = safe_read_json_file(dsinfo_json_path, debug_level, required=True, default={})
+    if not isinstance(dsinfo, dict):
+        raise BundleLoadError(f"Single-node dsinfo.json is not a JSON object: {dsinfo_json_path}")
+    
+    node_id = "single-node"
+    is_manager = False
+    node_ip = "0.0.0.0"
+    cluster_id ="0000000000"
+
+    dsinfo_txt_path = root / "dsinfo" / "dsinfo.txt"
+    
+    if dsinfo_txt_path.is_file():
+        with dsinfo_txt_path.open("r", encoding="utf-8", errors="ignore") as r:
+            for line in r:
+                if "NodeID:" in line:
+                    node_id = line.split("NodeID:", 1)[1].strip()
+                
+                if "Is Manager:" in line:
+                    is_manager = line.split("Is Manager:", 1)[1].strip().lower() == "true"
+
+                if "Node Address:" in line:
+                    node_ip = line.split("Node Address:", 1)[1].strip()
+                
+                if "com.docker.ucp.InstanceID" in line:
+                    match = re.search(r'"com\.docker\.ucp\.InstanceID"\s*:\s*"([^"]+)"', line)
+                    if match:
+                        cluster_id = match.group(1)
+
+    mke_version = "?.?.??"
+    mke_found = getddcver(str(root / "dsinfo" / "inspect"), "ucp-proxy.txt", "IMAGE_VERSION", debug_level)
+    if mke_found != "-":
+        mke_version = mke_found
+
+
+    docker_info = dsinfo.get("docker_info", {})
+    docker_version = dsinfo.get("docker_version", {})
+
+    hostname_list = dsinfo.get("hostname", [])
+    hostname = hostname_list[0] if hostname_list else "single-node"
+
+    server_version = docker_version.get("Server", {})
+    engine_version = server_version.get("Version", "?.?.????")
+
+    arch = docker_info.get("Architecture", "unknown")
+
+    ncpu = safe_int(docker_info.get("NCPU", 0), 0)
+    mem_total = safe_int(docker_info.get("MemTotal", 0), 0)
+
+    nano_cpus = ncpu * 1_000_000_000
+    memory_bytes = mem_total
+
+    role_value = "manager" if is_manager else "worker"
+
+    node = {
+        "ID": node_id,
+        "Description": {
+            "Hostname": hostname,
+            "Resources": {
+                "NanoCPUs": nano_cpus,
+                "MemoryBytes": memory_bytes,
+            },
+            "Platform": {
+                "Architecture": arch,
+                "OS": "linux",
+            },
+            "Engine": {
+                "EngineVersion": engine_version,
+            },
+        },
+        "Spec": {
+            "Role": role_value,
+            "Labels": {
+                "com.docker.ucp.orchestrator.swarm": "true",
+                "com.docker.ucp.orchestrator.kubernetes": "true",
+                "_sdnodes_single_mke_version": mke_version,
+                "_sdnodes_single_cluster_id": cluster_id,
+            },
+            "Availability": "Unknown",
+        },
+        "Status": {
+            "State": "unknown",
+            "Addr": node_ip,
+            "Message": "No Status Avail",
+        },
+        "CreatedAt": "(NoDateAvail",
+        "UpdatedAt": "NoDateAvail)",
+    }
+
+    return [node]
+
+#------------------------------------------------------------
+# Purpose:
+#   Extract a short node ID from a node dictionary for warnings
+#   and diagnostics.
+#
+# Returns:
+#   First 10 characters of the node ID, or a default fallback.
+#------------------------------------------------------------
+def safe_node_id(node: dict, default: str = "UNKNOWN-ID") -> str:
+    if isinstance(node, dict):
+        node_id = node.get("ID")
+        if isinstance(node_id, str) and node_id.strip():
+            return node_id[:10]
+    return default
+
+#------------------------------------------------------------
+# Purpose:
+#   Process every discovered node, collect operating system,
+#   platform, hardware and version information, then generate
+#   the output rows for the selected output mode.
+#------------------------------------------------------------
+def collect_node_rows(sd: list, opts: Options, bundle_mode: str) -> NodeRowsResult:
     node_tuples = []
     kernels_of_nodes = set()
     cnt_mke_nodes = 0
@@ -291,336 +1151,485 @@ def getnodes(f: str , opts: Options):
     cnt_msr_nodes = 0
     cnt_gpu_nodes = 0
     cnt_vcpus = 0
+    skipped_nodes = 0
 
-    with open(f, 'r') as r:
-        sd = json.load(r)
-
-    # runtime options (avoid globals)
     account_name = opts.accountname
     ticket_number = opts.ticketnumber
     bundle_path = opts.bundlepath
     bundle_date = opts.bundledate
-    pretty = opts.pretty
+    ticket_mode = (opts.output_mode == "ticket")
+    pretty = False if ticket_mode else opts.pretty
     file_save = opts.filesave
     outputFile = opts.outputfile
     debug_level = opts.debug
     extended_output = opts.extended_output
-    # -----------------------------------------------------------------------------
-    # Output schema selection (kept compatible with legacy behavior)
+    root = bundle_root_path(bundle_path)
+
     has_account = (account_name != '<undefined account name>')
     has_ticket = (ticket_number != '00000000')
-
     include_hw = (extended_output >= 1)
 
     if has_account and has_ticket:
-        schema_mode = 'acct_ticket'
-        header = 'ACCOUNT TICKET CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE BUNDLEDATE'
+        header = 'ACCOUNT TICKET CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE -SCANDATE-'
         if include_hw:
             header += ' MANUFACTURER PRODUCT_NAME FAMILY'
-        sort_getter = itemgetter(5, 6, 3, 10)  # ROLE, TYPE, HOSTNAME, OS
+        sort_getter = itemgetter(5, 6, 3, 10)
+
         def build_row(**kw):
-            return (kw['account_name'], kw['ticket_number'], kw['cluster_id'], kw['hostname'], kw['id'], kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
-                    kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'], kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
-                    kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'], kw['stsmsg'], kw['bundle_date']) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
+            return (
+                kw['account_name'], kw['ticket_number'], kw['cluster_id'], kw['hostname'], kw['id'],
+                kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
+                kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'],
+                kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
+                kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'],
+                kw['stsmsg'], kw['bundle_date']
+            ) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
 
     elif has_account and not has_ticket:
-        schema_mode = 'acct_only'
-        header = 'ACCOUNT CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE BUNDLEDATE'
+        header = 'ACCOUNT CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE -SCANDATE-'
         if include_hw:
             header += ' MANUFACTURER PRODUCT_NAME FAMILY'
-        sort_getter = itemgetter(4, 5, 2, 9)  # ROLE, TYPE, HOSTNAME, OS
+        sort_getter = itemgetter(4, 5, 2, 9)
+
         def build_row(**kw):
-            return (kw['account_name'], kw['cluster_id'], kw['hostname'], kw['id'], kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
-                    kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'], kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
-                    kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'], kw['stsmsg'], kw['bundle_date']) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
+            return (
+                kw['account_name'], kw['cluster_id'], kw['hostname'], kw['id'],
+                kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
+                kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'],
+                kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
+                kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'],
+                kw['stsmsg'], kw['bundle_date']
+            ) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
 
     elif (not has_account) and has_ticket:
-        schema_mode = 'ticket_only'
-        header = 'TICKET CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRver SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE BUNDLEDATE'
+        header = 'TICKET CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRver SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE -SCANDATE-'
         if include_hw:
             header += ' MANUFACTURER PRODUCT_NAME FAMILY'
-        sort_getter = itemgetter(4, 5, 2, 9)  # ROLE, TYPE, HOSTNAME, OS
+        sort_getter = itemgetter(4, 5, 2, 9)
+
         def build_row(**kw):
-            return (kw['ticket_number'], kw['cluster_id'], kw['hostname'], kw['id'], kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
-                    kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'], kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
-                    kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'], kw['stsmsg'], kw['bundle_date']) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
+            return (
+                kw['ticket_number'], kw['cluster_id'], kw['hostname'], kw['id'],
+                kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
+                kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'],
+                kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
+                kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'],
+                kw['stsmsg'], kw['bundle_date']
+            ) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
 
     else:
-        schema_mode = 'minimal'
-        header = 'CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE BUNDLEDATE'
+        header = 'CLUSTER-ID HOSTNAME NODE-ID ROLE TYPE MCRv MKEv MSRv SWARM? KUBE? OS OSver ARCH HYPERV CPUs RAM GPU UPTIME AVAIL STATE IP/MASK COLLECT CREATED/UPDATED STATUS_MESSAGE -SCANDATE-'
         if include_hw:
             header += ' MANUFACTURER PRODUCT_NAME FAMILY'
-        sort_getter = itemgetter(3, 4, 1, 8)  # legacy: ROLE, TYPE, HOSTNAME, (SWARM?)
+        sort_getter = itemgetter(3, 4, 1, 8)
+
         def build_row(**kw):
-            return (kw['cluster_id'], kw['hostname'], kw['id'], kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
-                    kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'], kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
-                    kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'], kw['stsmsg'], kw['bundle_date'])  + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
+            return (
+                kw['cluster_id'], kw['hostname'], kw['id'],
+                kw['role'], kw['role_type'], kw['engver'], kw['ucpver'], kw['dtrver'],
+                kw['o_swarm'], kw['o_kube'], kw['os'], kw['os_string'], kw['arch'],
+                kw['hypervisor'], kw['cpus'], kw['ram'], kw['gpu_mode'], kw['node_uptime'],
+                kw['avail'], kw['state'], kw['addr'], kw['collect'], kw['t_stamps'],
+                kw['stsmsg'], kw['bundle_date']
+            ) + ((kw['manu'], kw['pname'], kw['fam']) if include_hw else ())
 
     header_cols = header.split(' ')
-    # -----------------------------------------------------------------------------
-    
-    
-    for node in sd:
-        hostname =  arch = os = os_string =  addr = node_uptime = cpus = "????"  # for windows nodes the value will remain like this
-        cpus = "0"
-        ram = "0"
-        kernel_of_node = ""
-        hypervisor = '-'
-        role = "       "
-        role_type = "    "
-        id = "          "
-        cpus = "     "
-        ram = "    "
-        addr = "???.???.???.???"
-        subnet_mask = "??"
-        manu = pname = fam = "...Unknown..."
 
+    for node_index, node in enumerate(sd, start=1):
+        try:
+            if not isinstance(node, dict):
+                skipped_nodes += 1
+                debug_print(1, debug_level, f"[warn] process_nodes: skipped node #{node_index}; expected object, got {type(node).__name__}")
+                continue
 
-    
-        
-        # Get the hostname if it is described
-        if "Description" in node:
-            if 'Hostname' in node['Description']:
-                hostname = node['Description']['Hostname']
-            else: # no hostname in the description so lets mark it with !!!'s and the nodeID in the output
-                if "ID" in node:
-                    trunc = node['ID'][:10]
-                    hostname = f"!!! {trunc} ID!!!>>"
-                
+            hostname = "????"
+            arch = "????"
+            os = "????"
+            os_string = "????"
+            addr = "???.???.???.???"
+            node_uptime = "????"
+            cpus = "     "
+            ram = "    "
+            kernel_of_node = ""
+            hypervisor = "-"
+            role = "       "
+            role_type = "    "
+            node_id_short = "          "
+            subnet_mask = "??"
+            manu = pname = fam = "...Unknown..."
+            avail = "unknown"
+            state = "unknown"
+            collect = "unknown"
+            stsmsg = "N/A"
+            o_swarm = "------"
+            o_kube = "------"
+            gpu_mode = "... "
+            engver = "?.?.????"
+            ucpver = "?.?.??"
+            dtrver = "-.-.--"
 
-        # Get the unique ID of this node if it is present
-        if "ID" in node:
-            id = node['ID'][:10]
-        else:
-            continue # no ID in node
+            desc = node.get("Description", {})
+            if not isinstance(desc, dict):
+                desc = {}
 
-        # Get the role of this node
-        if "Spec" in node:
-            if node['Spec']['Role'] == 'manager':
-                if "ManagerStatus" in node:
-                    if 'Leader' in node['ManagerStatus'] and node['ManagerStatus']['Leader'] == True:
-                        role = 'leader'
-                        role_type = 'MKE '
+            spec = node.get("Spec", {})
+            if not isinstance(spec, dict):
+                spec = {}
+
+            status = node.get("Status", {})
+            if not isinstance(status, dict):
+                status = {}
+
+            labels = spec.get("Labels", {})
+            if not isinstance(labels, dict):
+                labels = {}
+
+            manager_status = node.get("ManagerStatus", {})
+            if not isinstance(manager_status, dict):
+                manager_status = {}
+
+            platform = desc.get("Platform", {})
+            if not isinstance(platform, dict):
+                platform = {}
+
+            resources = desc.get("Resources", {})
+            if not isinstance(resources, dict):
+                resources = {}
+
+            engine = desc.get("Engine", {})
+            if not isinstance(engine, dict):
+                engine = {}
+
+            hostname = desc.get("Hostname", hostname)
+            if not hostname and "ID" in node:
+                hostname = f"!!! {str(node['ID'])[:10]} ID!!!>>"
+
+            if "ID" in node and isinstance(node["ID"], str) and node["ID"].strip():
+                node_id_short = node["ID"][:10]
+            else:
+                skipped_nodes += 1
+                debug_print(1, debug_level, f"[warn] process_nodes: skipped node #{node_index}; missing node ID")
+                continue
+
+            spec_role = spec.get("Role")
+            if spec_role == "manager":
+                if manager_status:
+                    if manager_status.get("Leader") is True:
+                        role = "leader"
                     else:
-                        role = 'manager'
-                        role_type = 'MKE '
-                else:  # something went wrong during the bundle creation, says this is a manager but something crapped out...
-                    role = 'BAD-Manager'
-                    role_type = 'MKE '
+                        role = "manager"
+                    role_type = "MKE "
+                else:
+                    role = "BAD-Manager"
+                    role_type = "MKE "
+            elif spec_role:
+                role = "worker"
+                role_type = "MCR "
+
+            nano_cpus = resources.get("NanoCPUs")
+            if isinstance(nano_cpus, (int, float)):
+                cpu_count = int(nano_cpus / 1e9)
+                cpus = str(cpu_count)
+                cnt_vcpus += cpu_count
+
+            memory_bytes = resources.get("MemoryBytes")
+            if isinstance(memory_bytes, (int, float)):
+                ram = str(round(memory_bytes / (1024 ** 3), 2))
+
+            cpus += "     "
+            ram += "    "
+
+            arch = platform.get("Architecture", arch)
+
+            avail = spec.get("Availability", avail)
+            state = status.get("State", state)
+
+            if "Addr" in status:
+                addr = status.get("Addr") or addr
+                if addr in ("127.0.0.1", "0.0.0.0"):
+                    mgr_addr = manager_status.get("Addr")
+                    if isinstance(mgr_addr, str) and mgr_addr:
+                        addr = mgr_addr.replace(":2377", "")
+
+            if "OS" in platform:
+                os = platform.get("OS", os)
+                os_string, hypervisor, node_uptime, subnet_mask, kernel_of_node, manu, pname, fam = full_os_details_v1(
+                    hostname, addr, bundle_path, debug_level, bundle_mode
+                )
+                addr = " / ".join([addr, subnet_mask])
+                if kernel_of_node:
+                    kernels_of_nodes.add(kernel_of_node)
+
+            if "EngineVersion" in engine:
+                engver = engine.get("EngineVersion", engver)
+
+            collect = labels.get("com.docker.ucp.access.label", collect)
+
+            if labels.get("com.docker.ucp.orchestrator.swarm") == "true":
+                o_swarm = "swarm "
+
+            if labels.get("com.docker.ucp.orchestrator.kubernetes") == "true":
+                o_kube = "kube  "
+
+            if "Message" in status:
+                stsmsg = status.get("Message", stsmsg)
+
+            if bundle_mode == BUNDLE_MODE_SINGLE:
+                dir_to_search2 = root / "dsinfo" / "inspect"
             else:
-                role = 'worker'
-                role_type = 'MCR '
-        
-        
-        
-        # now we need to check if it is a bad manager and see if cpus and ram is present...
-        if "Description" in node:
-            if "Resources" in node['Description']:
-                if "NanoCPUs" in node['Description']['Resources']:
-                    # 1 CPU == 10⁹ NanoCPUs
-                    nano_cpus = node['Description']['Resources']['NanoCPUs']
-                    cpus = str(int(nano_cpus/1e9))
-                    cnt_vcpus += int(nano_cpus/1e9)
-                    if "MemoryBytes" in node['Description']['Resources']:
-                        # 1 GiB == 1024³ bytes
-                        total_ram = node['Description']['Resources']['MemoryBytes']
-                        ram = str(round(total_ram/(1024**3), 2))
-                    
-        # now pad out the cpus and ram with spaces for output
-        cpus += "     "
-        ram += "    "
-        
-        if 'Architecture' in node['Description']['Platform']:
-            arch = node['Description']['Platform']['Architecture']
+                dir_to_search2 = root / hostname / "dsinfo" / "inspect"
 
-        # Get the availability and state of this node.
-        if "Spec" in node:
-            if "Availability" in node['Spec']:
-                avail = node['Spec']['Availability']
-            else:
-                avail = "unknown"
-        if "Status" in node:
-            if "State" in node['Status']:
-                state = node['Status']['State']
-            else:
-                state = "unknown"
+            ucpver_found = getddcver(str(dir_to_search2), "ucp-proxy.txt", "IMAGE_VERSION", debug_level)
+            if ucpver_found != "-":
+                ucpver = ucpver_found
+            elif bundle_mode == BUNDLE_MODE_SINGLE:
+                ucpver = labels.get("_sdnodes_single_mke_version", ucpver)
 
-        # Get the IP address
-        if "Status" in node:
-            if 'Addr' in node['Status']:
-                addr = node['Status']['Addr']
-                if addr == '127.0.0.1' or addr == '0.0.0.0':  ## for some manager nodes we may have this, and we should correct 
-                    # now verify that ManagerStatus is there, then check to make sure Addr is present too...
-                    if "ManagerStatus" in node:
-                        if "Addr" in node['ManagerStatus']:
-                            addr = node['ManagerStatus']['Addr']
-                            addr = addr.replace(':2377','')
-        
-        if "Description" in node:
-            if "Platform" in node['Description']:
-                if 'OS' in node['Description']['Platform']:
-                    os = node['Description']['Platform']['OS']
-                    # Now get the fully qualified OS string, the hypervisor, how long running, subnet mask, also the kernel of the node...
-                    os_string, hypervisor, node_uptime, subnet_mask, kernel_of_node, manu, pname, fam = full_os_details_v1(hostname, addr, bundle_path, debug_level)
-                    addr = ' / '.join([addr, subnet_mask])  # addr = addr + ' / ' + subnet_mask
-                    #print(f"---kernel_of_node---{kernel_of_node}  ---hostname---{hostname}")
-                    if kernel_of_node != "":
-                        kernels_of_nodes.add(kernel_of_node)
+            dtrver_found = getddcver(str(dir_to_search2), "dtr-registry-*.txt", "DTR_VERSION", debug_level)
+            if dtrver_found != "-":
+                dtrver = dtrver_found
 
-        # Get the MCR version
-        engver = "?.?.????"
-        collect = "unknown"
-        if "Description" in node:
-            if "Engine" in node['Description']:
-                if 'EngineVersion' in node['Description']['Engine']:
-                    engver = node['Description']['Engine']['EngineVersion']
-                if "Spec" in node:
-                    if "Labels" in node['Spec']:
-                        if "com.docker.ucp.access.label" in node['Spec']['Labels']:
-                            collect = node['Spec']['Labels']['com.docker.ucp.access.label']
-                        # here we can Display if swarm / kube orchestrator
-                        # Display if swarm / kube orchestrator
-                        o_swarm = o_kube = '-'
-                        if 'com.docker.ucp.orchestrator.swarm' in node['Spec']['Labels'] and node['Spec']['Labels']['com.docker.ucp.orchestrator.swarm'] == 'true':
-                            o_swarm = 'swarm '
-                        else:
-                            o_swarm = '------'
-                        if 'com.docker.ucp.orchestrator.kubernetes' in node['Spec']['Labels'] and node['Spec']['Labels']['com.docker.ucp.orchestrator.kubernetes'] == 'true':
-                            o_kube = 'kube  '
-                        else:
-                            o_kube = '------'
-                        combined_orch = '/'.join([o_swarm, o_kube])
+            if dtrver != "-.-.--":
+                role_type = "MSR "
 
-        
+            file_path = root / "ucp-instance-id.txt"
+            cluster_id = "0000000000"
 
-        # Get the status of the node.  I dont care about the status of this node....
-        stsmsg = "N/A"
-        if "Status" in node:
-            if 'Message' in node['Status']:
-                stsmsg = node['Status']['Message']
-        
-        # do we really need to display this column of versioning....  its redundant because i already do the VER column, why put the MCR-ver & MKE/MSR???
-        # Get the MKE and MSR version numbers, and also append the /msrversion to the column MKE/MSR if MSR node
-        ucpver = "?.?.??"
-        dtrver = "?.?.??"
-        if bundle_path != '.':
-            dir_to_search2 = bundle_path 
-            dir_to_search2 += hostname 
-        else:
-            dir_to_search2 = hostname 
-        ucpver     = getddcver(dir_to_search2,'ucp-proxy.txt','IMAGE_VERSION')
-        if ucpver == '-':
-            ucpver = '?.?.??'
-        dtrver     = getddcver(dir_to_search2,'dtr-registry-*.txt','DTR_VERSION')
-        if dtrver == '-':
-            dtrver = '-.-.--'
+            if file_path.is_file():
+                try:
+                    cluster_id = file_path.read_text(encoding="utf-8").strip()
+                except Exception as e:
+                    debug_print(1, debug_level, f"[warn] process_nodes: failed reading cluster id file {file_path}: {e}")
+                    cluster_id = "00-??-000"
 
-        if dtrver != '-.-.--':
-            role_type = 'MSR '
+            if bundle_mode == BUNDLE_MODE_SINGLE:
+                cluster_id = labels.get("_sdnodes_single_cluster_id", "0000000000")
 
-        if bundle_path != '.':
-            path_to_search = bundle_path 
-            path_to_search += 'ucp-instance-id.txt' 
-        else:
-            path_to_search = 'ucp-instance-id.txt'
-        file_path = Path(path_to_search)
-        
-        cluster_id = '0000000000'
-        if file_path.is_file():
-            try:
-            # .read_text() returns whole file; .strip() removes newline
-                cluster_id = file_path.read_text(encoding='utf-8').strip()
-            except Exception as e:
-                cluster_id = '00-??-000'
-        # truncate to ten characters
-        cluster_id =cluster_id[:10]
+            cluster_id = str(cluster_id)[:10]
 
-        c_at = "1970-01-01T00:00:00.0000000Z"
-        u_at = "1970-01-01T00:00:00.0000000Z"
-        # Get when this node was created and last updated.
-        if "CreatedAt" in node:
-            c_at = node['CreatedAt'].split('.')[0].replace("T","_")
-        if "UpdatedAt" in node:
-            u_at = node['UpdatedAt'].split('.')[0].replace("T","_")
-        t_stamps = ' / '.join([c_at,u_at])
-        
-        #ucpver,dtrver, engver
-        match role_type:
-            case "MKE ":
-                disp_ver = ucpver
-            case "MCR ":
-                disp_ver = engver
-            case "MSR ":
-                disp_ver = dtrver 
+            c_at = "1970-01-01T00:00:00.0000000Z"
+            u_at = "1970-01-01T00:00:00.0000000Z"
 
-        debug_print(2, debug_level, f"role_type={role_type}, engver={engver}    ucpver={ucpver}    dtrver={dtrver} ")
+            if isinstance(node.get("CreatedAt"), str):
+                c_at = node["CreatedAt"].split(".", 1)[0].replace("T", "_")
 
-        # this expects a fully qualified path to the file kube-describe-node.txt which is in the root directory of the bundle
-        # for example "docker-support-wb4gjlv-20250723-07_53_35/kube-describe-node.txt"
-        # 
-        #-------------------------------------------------------------------------------------
-        kubedescribe_file  = bundle_path 
-        kubedescribe_file += 'kube-describe-nodes.txt'
-        nodehostname = hostname.split('.', 1)[0]
-        
-        gpu = 0
-        gpu = parse_node_gpu_flag( kubedescribe_file, nodehostname )
-        
-        if gpu:
-            gpu_mode = 'GPU '
-        else:
-            gpu_mode = '... '
+            if isinstance(node.get("UpdatedAt"), str):
+                u_at = node["UpdatedAt"].split(".", 1)[0].replace("T", "_")
 
-        
-        
+            t_stamps = " / ".join([c_at, u_at])
 
-        # Build the output row once per node (schema selected above)
-        node_tuples.append(build_row(account_name=account_name, ticket_number=ticket_number, cluster_id=cluster_id, hostname=hostname, id=id, role=role, role_type=role_type, disp_ver=disp_ver, engver=engver, ucpver=ucpver, dtrver=dtrver, o_swarm=o_swarm, o_kube=o_kube, os=os, os_string=os_string, arch=arch, hypervisor=hypervisor, cpus=cpus, ram=ram, gpu_mode=gpu_mode, node_uptime=node_uptime, avail=avail, state=state, addr=addr, collect=collect, t_stamps=t_stamps, stsmsg=stsmsg, bundle_date=bundle_date, manu=manu, pname=pname, fam=fam))
+            disp_ver = engver
+            match role_type:
+                case "MKE ":
+                    disp_ver = ucpver
+                case "MCR ":
+                    disp_ver = engver
+                case "MSR ":
+                    disp_ver = dtrver
 
-        match role_type:
-            case "MKE ":
-                cnt_mke_nodes += 1
-            case "MCR ":
-                cnt_mcr_nodes += 1
-            case "MSR ":
-                cnt_msr_nodes += 1
-        if gpu:
-            cnt_gpu_nodes += 1
-    
-    # Sort and compute column widths once (legacy code recomputed this inside the node loop)
-    s = sorted(node_tuples, key=sort_getter) if node_tuples else []
-    w = []
-    if node_tuples:
-        for i in range(len(node_tuples[0])):
-            longest_value_in_col_i = max(s, key=lambda row: len(str(row[i])))[i]
-            w.append(len(str(longest_value_in_col_i)))
+            debug_print(2, debug_level, f"role_type={role_type}, engver={engver}    ucpver={ucpver}    dtrver={dtrver}")
+
+            kubedescribe_file = root / "kube-describe-nodes.txt"
+            nodehostname = str(hostname).split(".", 1)[0]
+
+            gpu = parse_node_gpu_flag(str(kubedescribe_file), nodehostname)
+
+            if not gpu and bundle_mode == BUNDLE_MODE_SINGLE:
+                try:
+                    dsinfo_json_file = root / "dsinfo" / "dsinfo.json"
+                    if dsinfo_json_file.is_file():
+                        if "nvidia.com/gpu" in dsinfo_json_file.read_text(encoding="utf-8", errors="ignore"):
+                            gpu = 1
+                except Exception:
+                    pass
+
+            if gpu:
+                gpu_mode = "GPU "
+
+            node_tuples.append(build_row(
+                account_name=account_name,
+                ticket_number=ticket_number,
+                cluster_id=cluster_id,
+                hostname=hostname,
+                id=node_id_short,
+                role=role,
+                role_type=role_type,
+                disp_ver=disp_ver,
+                engver=engver,
+                ucpver=ucpver,
+                dtrver=dtrver,
+                o_swarm=o_swarm,
+                o_kube=o_kube,
+                os=os,
+                os_string=os_string,
+                arch=arch,
+                hypervisor=hypervisor,
+                cpus=cpus,
+                ram=ram,
+                gpu_mode=gpu_mode,
+                node_uptime=node_uptime,
+                avail=avail,
+                state=state,
+                addr=addr,
+                collect=collect,
+                t_stamps=t_stamps,
+                stsmsg=stsmsg,
+                bundle_date=bundle_date,
+                manu=manu,
+                pname=pname,
+                fam=fam
+            ))
+
+            match role_type:
+                case "MKE ":
+                    cnt_mke_nodes += 1
+                case "MCR ":
+                    cnt_mcr_nodes += 1
+                case "MSR ":
+                    cnt_msr_nodes += 1
+
+            if gpu:
+                cnt_gpu_nodes += 1
+
+        except Exception as e:
+            skipped_nodes += 1
+            node_hint = safe_node_id(node)
+            debug_print(1, debug_level, f"[warn] process_nodes: skipped node #{node_index} ({node_hint}) due to error: {e}")
+            continue
+
+    sorted_rows = sorted(node_tuples, key=sort_getter) if node_tuples else []
+    total_nodes = cnt_mke_nodes + cnt_mcr_nodes + cnt_msr_nodes
+
+    stats = {
+        "total_nodes": total_nodes,
+        "mke_nodes": cnt_mke_nodes,
+        "mcr_nodes": cnt_mcr_nodes,
+        "msr_nodes": cnt_msr_nodes,
+        "gpu_nodes": cnt_gpu_nodes,
+        "vcpus": cnt_vcpus,
+        "skipped_nodes": skipped_nodes,
+        "unique_kernels": sorted(kernels_of_nodes),
+    }
+
+    return NodeRowsResult(
+        header_cols=header_cols,
+        rows=sorted_rows,
+        stats=stats,
+        bundle_mode=bundle_mode,
+    )
+
+#------------------------------------------------------------
+# Purpose:
+#   Render collected node rows using the existing table/CSV
+#   behavior, including optional file output and engineer-mode
+#   summary information.
+#------------------------------------------------------------
+def render_table(result: NodeRowsResult, opts: Options) -> None:
+    ticket_mode = (opts.output_mode == "ticket")
+    pretty = False if ticket_mode else opts.pretty
+    file_save = opts.filesave
+    outputFile = opts.outputfile
+    debug_level = opts.debug
+
+    if result.rows:
+        widths = []
+        for i in range(len(result.rows[0])):
+            longest_value_in_col_i = max(result.rows, key=lambda row: len(str(row[i])))[i]
+            widths.append(len(str(longest_value_in_col_i)))
     else:
-        # Edge case: no rows found; still print a header safely
-        w = [len(c) for c in header_cols]
+        widths = [len(c) for c in result.header_cols]
 
     if file_save:
-        with open(outputFile, 'w') as outfile:
-            # 2) print & write the header
-            row_print2(header_cols, w, outfile=outfile, pretty=pretty)
-            # 3) print & write each data row
-            for row in s:
-                row_print2(row, w, outfile=outfile, pretty=pretty)
+        with open(outputFile, "w") as outfile:
+            row_print2(result.header_cols, widths, outfile=outfile, pretty=pretty)
+            for row in result.rows:
+                row_print2(row, widths, outfile=outfile, pretty=pretty)
     else:
-        row_print2(header_cols, w, outfile=None, pretty=pretty)
-        for row in s:
-            row_print2(row, w, outfile=None, pretty=pretty)
+        row_print2(result.header_cols, widths, outfile=None, pretty=pretty)
+        for row in result.rows:
+            row_print2(row, widths, outfile=None, pretty=pretty)
 
-    
-    print(f"--------------------------------------------------------------------------\n🔶🔶 SUMMARY INFORMATION 🔶🔶", flush=True)
-    print(f"Node Counts:  MKE:[{cnt_mke_nodes}]   MCR:[{cnt_mcr_nodes}]   MSR:[{cnt_msr_nodes}]   vCPU:[{cnt_vcpus}]\n", flush=True)
-    print(f"Unique OS kernels discovered [{len(kernels_of_nodes)}]\n{format(kernels_of_nodes)}\n---------------------------------------------------", flush=True)
-        
+    total_nodes = result.stats["total_nodes"]
+    cnt_mke_nodes = result.stats["mke_nodes"]
+    cnt_mcr_nodes = result.stats["mcr_nodes"]
+    cnt_msr_nodes = result.stats["msr_nodes"]
+    cnt_vcpus = result.stats["vcpus"]
+    skipped_nodes = result.stats["skipped_nodes"]
+    kernels_of_nodes = set(result.stats["unique_kernels"])
 
-    
+    if not ticket_mode:
+        print(f"--------------------------------------------------------------------------\n🔶🔶 SUMMARY INFORMATION 🔶🔶", flush=True)
+        print(f"Node Counts: TOTAL:[{total_nodes}]  MKE:[{cnt_mke_nodes}]   MCR:[{cnt_mcr_nodes}]   MSR:[{cnt_msr_nodes}]   vCPU:[{cnt_vcpus}]\n", flush=True)
 
-#---------------------------
-# These methods simply validates the command line date/time format is correct, if specified
-#---------------------------
+        if skipped_nodes:
+            print(f"Skipped Nodes: [{skipped_nodes}] — run with --debug 1 for details\n", flush=True)
+
+        print(f"Unique OS kernels discovered [{len(kernels_of_nodes)}]\n{format(kernels_of_nodes)}\n---------------------------------------------------", flush=True)
+    else:
+        debug_print(1, debug_level, f"[info] Node Counts: TOTAL:[{total_nodes}] MKE:[{cnt_mke_nodes}] MCR:[{cnt_mcr_nodes}] MSR:[{cnt_msr_nodes}] vCPU:[{cnt_vcpus}]")
+        if skipped_nodes:
+            debug_print(1, debug_level, f"[warn] Skipped Nodes: [{skipped_nodes}]")
+        debug_print(2, debug_level, f"[info] Unique OS kernels discovered [{len(kernels_of_nodes)}] {format(kernels_of_nodes)}")
+
+#------------------------------------------------------------
+# Purpose:
+#   Future JSON renderer. Present as a v1.23 seam only; no CLI
+#   option calls this yet.
+#------------------------------------------------------------
+def render_json(result: NodeRowsResult, opts: Options) -> None:
+    """
+    Render collected node rows as structured JSON.
+
+    JSON output is intentionally based on the same collected rows used by
+    render_table(), so parser behavior remains unchanged.
+    """
+    row_objects = []
+    for row in result.rows:
+        row_objects.append({
+            str(header): ("" if value is None else str(value).strip())
+            for header, value in zip(result.header_cols, row)
+        })
+
+    payload = {
+        "tool": TOOL_NAME,
+        "version": VERSION,
+        "output_format": "json",
+        "output_mode": opts.output_mode,
+        "bundle_mode": result.bundle_mode,
+        "schema": result.header_cols,
+        "rows": row_objects,
+        "stats": result.stats,
+    }
+
+    json_text = json.dumps(payload, indent=2, sort_keys=False)
+
+    print(json_text, flush=True)
+
+    if opts.filesave:
+        with open(opts.outputfile, "w", encoding="utf-8") as outfile:
+            outfile.write(json_text + "\n")
+
+#------------------------------------------------------------
+# Purpose:
+#   Process every discovered node through the new collection seam,
+#   then render using the existing table/CSV behavior.
+#------------------------------------------------------------
+def process_nodes(sd: list, opts: Options, bundle_mode: str):
+    result = collect_node_rows(sd, opts, bundle_mode)
+
+    if opts.output_format == "json":
+        render_json(result, opts)
+    else:
+        render_table(result, opts)
+
+#------------------------------------------------------------
+# Purpose:
+#   Normalize a date/time string into DD/MM/YYYY, hh:mm form,
+#   defaulting the time to 00:00 when missing or invalid.
+#
+# Returns:
+#   Normalized timestamp string.
+#------------------------------------------------------------
 def normalize_timestamp(ts: str) -> str:
     """
     Ensure ts is in the form 'DD/MM/YYYY, hh:mm'.
@@ -638,7 +1647,15 @@ def normalize_timestamp(ts: str) -> str:
             print(f"Warning: time '{time_candidate}' is invalid, defaulting to '00:00'")
     # if we fell through (no time or bad time)…
     return f"{date_part}, 00:00"
-#---------------------------
+
+#------------------------------------------------------------
+# Purpose:
+#   Validate that a string is a real calendar date in DD/MM/YYYY
+#   format.
+#
+# Returns:
+#   True when valid, otherwise False.
+#------------------------------------------------------------
 def validate_date(date_str: str) -> bool:
     """Return True if date_str is a valid calendar date in DD/MM/YYYY."""
     if not re.fullmatch(r"\d{2}/\d{2}/\d{4}", date_str):
@@ -662,16 +1679,31 @@ def validate_date(date_str: str) -> bool:
         return False
 
     return True
-#---------------------------
+
+#------------------------------------------------------------
+# Purpose:
+#   Normalize a timestamp and validate the DD/MM/YYYY date
+#   portion.
+#
+# Returns:
+#   True when the date portion is valid, otherwise False.
+#------------------------------------------------------------
 def validate_timestamp(ts: str) -> bool:
     """
     Normalize ts → 'DD/MM/YYYY, hh:mm', then validate the date portion.
     """
     norm = normalize_timestamp(ts)
-    #print(f"Normalized → '{norm}'")
     date_part = norm.split(",", 1)[0].strip()
     return validate_date(date_part)
-#---------------------------
+
+#------------------------------------------------------------
+# Purpose:
+#   Validate that a string is a real calendar date in DD/MM/YYYY
+#   format.
+#
+# Returns:
+#   True when valid, otherwise False.
+#------------------------------------------------------------
 def validate_ddmmyyyy(date_str: str) -> bool:
     """
     Return True if date_str (DD/MM/YYYY) is valid.
@@ -695,7 +1727,15 @@ def validate_ddmmyyyy(date_str: str) -> bool:
         return False
 
     return True
-#---------------------------
+
+#------------------------------------------------------------
+# Purpose:
+#   Ensure a date string includes a valid HH:MM time, appending
+#   or replacing the time with 00:00 when needed.
+#
+# Returns:
+#   Timestamp string with a valid time component.
+#------------------------------------------------------------
 def ensure_timestamp(ts: str) -> str:
     """
     Ensure ts contains a time.  
@@ -715,7 +1755,18 @@ def ensure_timestamp(ts: str) -> str:
     else:
         # malformed time
         return f"{date_part.strip()}, 00:00"
-#---------------------------
+
+#------------------------------------------------------------
+# Purpose:
+#   Normalize a timestamp and raise an error if the date portion
+#   is not valid.
+#
+# Returns:
+#   Normalized timestamp string.
+#
+# Raises:
+#   ValueError when the date portion is invalid.
+#------------------------------------------------------------
 def normalize_and_validate(ts: str) -> str:
     """
     Normalize ts to include time and validate the date portion.
@@ -731,110 +1782,177 @@ def normalize_and_validate(ts: str) -> str:
 
     return normalized
 
-# -----------------------------------------------------------------------------------
-#if __name__ == "__main__":
+#------------------------------------------------------------
+# Purpose:
+#   Convert a SIGTERM signal into KeyboardInterrupt so the normal
+#   interrupt handling path can be reused.
+#------------------------------------------------------------
 def _handle_sigterm(signum, frame):
     raise KeyboardInterrupt
 
-
+#------------------------------------------------------------
+# Purpose:
+#   Print a clean interruption message and return the standard
+#   interrupted exit code.
+#
+# Returns:
+#   130.
+#------------------------------------------------------------
 def _handle_top_level_interrupt() -> int:
     print("\n[sdnodes] interrupted — exiting gracefully")
     return 130
 
-
+#------------------------------------------------------------
+# Purpose:
+#   Parse command-line options, detect and load the support bundle,
+#   invoke node processing and return the correct process exit code.
+#
+# Returns:
+#   0 for successful output, 2 for invalid/unsupported bundles,
+#   or 130 when interrupted.
+#------------------------------------------------------------
 def cli_main() -> int:
     # Set up argument parser
-    parser = argparse.ArgumentParser(description="SDNODES Version: 1.14  Command line input enabled with:")
+    parser = argparse.ArgumentParser(description="{TOOL_NAME} Version: {VERSION}  Command line input enabled with:")
     parser.add_argument("--pretty", type=int, choices=[0, 1], default=1, help="Set pretty level: 1=On (Default: no delimiters) 0=Off(Use a semicolon (;) as delimiter to enable import to spreadsheet)")
-    parser.add_argument("--outputfile", type=str, default='nodes_output.csv', help="Output file name (e.g., test.csv) -- (default = nodes_output.csv), can have a fully qualified path and filename for placement (directory MUST exist), else placed into pwd ")
+    parser.add_argument("--outputfile", type=str, default=None, help="Output file name/path. Default: nodes_output.csv for table output, nodes_output.json for JSON output. Can include a full path for placement; directory must already exist.")
     parser.add_argument("--filesave", type=int, choices=[0,1], default=0, help="Turn on saving to output file. Default=0 disabled. If enabled see --outputfile")
     parser.add_argument("--accountname", type=str, default='<undefined account name>', help="Used to supply an Account Name if desired. Default = <undefined account name>. If using spaces in the Account Name be sure to enclose them in double quotes ")
     parser.add_argument("--ticketnumber", type=str, default='00000000', help="Used if you want to show output associated specifically with a ticket number. Default = 00000000" )
     parser.add_argument("--bundlepath", type=str, default='.', help="Path to where support bundle resides. Default = .  ")
+    parser.add_argument("--bundlefile", type=str, default="", help="Path to where compressed (e.g. zip..) support bundle resides. Default = .  ")
     parser.add_argument("--bundledate", type=str, default=None, help="Simple date of support bundle. Format: dd/mm/YYYY   Default=today")
     parser.add_argument("--bundlecreatedate", type=str, default='', help="Extended date of support bundle. Any string, preferred style: 2025-07-21T06:51:40.000Z  Default = '' ")
     parser.add_argument("--debug", type=int, choices=[0,1,2,3,4], default=0, help="Debug level: 0=off (default) up to 4=very verbose")
-    parser.add_argument("--extended-output", type=int, choices=[0, 1, 2, 3, 4], default=0, help="Extended output level: 0=baseline (default) up to 4=most detailed, for now if >= 1 then displays hardware info")
+    parser.add_argument("--extended-output", type=int, choices=[0, 1, 2, 3, 4], default=1, help="Extended output level: 0=baseline (default) up to 4=most detailed, for now if >= 1 then displays hardware info")
+    parser.add_argument("--output-mode", choices=["engineer", "ticket"], default="engineer", help="Output mode: engineer=human terminal output with summary; ticket=clean semicolon-delimited ingestion output, useful for ingestion to such as Salesforce")
+    parser.add_argument("--output-format", choices=["table", "json"], default="table", help="Output format: table=existing aligned/semicolon output; json=structured machine-readable JSON")
 
     args = parser.parse_args()
+
+    #------------------------------------------------------------
+    # Validate mutually exclusive input options.
+    # If invalid error out exit with 2
+    #------------------------------------------------------------
+    if args.bundlefile and args.bundlepath != ".":
+        parser.error( "Specify either --bundlepath or --bundlefile, not both." )
+
     # time.sleep(7) just a simple test to delay so I can test the multiapp functions within the console tab windows... 
     debug_level = args.debug
+    output_mode = args.output_mode
+    output_format = args.output_format
+    ticket_mode = (output_mode == "ticket")
+    json_format = (output_format == "json")
 
     extended_output = args.extended_output
-    pretty = args.pretty
-    if pretty == 0:
+    pretty = 0 if ticket_mode else args.pretty
+    if pretty == 0 and not ticket_mode and not json_format:
         print("Pretty = False, using semicolon delimiter")
-    
+
     outputFile = args.outputfile
+    if outputFile is None:
+        outputFile = "nodes_output.json" if json_format else "nodes_output.csv"
+
     file_save = args.filesave
-    if file_save == 1:
+    if file_save == 1 and not ticket_mode and not json_format:
         print(f"Saving output to: {outputFile}")
-    
+    elif file_save == 1 and json_format:
+        debug_print(1, debug_level, f"[info] Saving JSON output to: {outputFile}")
+
     account_name = args.accountname
     if account_name != '<undefined account name>':
         account_name = f"{account_name:<9}" #pad it out with spaces to a minimum of 9 chars, will make pretty output lineup.
-        print(f"Using AccountName: {account_name}")
-    
-    ticket_number = args.ticketnumber 
+        if not ticket_mode and not json_format:
+            print(f"Using AccountName: {account_name}")
+
+    ticket_number = args.ticketnumber
     if ticket_number != '00000000':
         ticket_number = f"{ticket_number:<9}" #pad it out with spaces to be minimum of 9 chars, will make pretty output line up.
-        print(f"Using Ticket Number: {ticket_number}")
+        if not ticket_mode and not json_format:
+            print(f"Using Ticket Number: {ticket_number}")
 
-    bundle_path = args.bundlepath 
-    if bundle_path != '.':
-        if not bundle_path.endswith('/'):
-            bundle_path += '/'   
-        bundle_file = bundle_path 
-        bundle_file += ucp_nodes 
-        print(f"Using Bundle Path: {bundle_path}") 
-    else:
-        bundle_file = ucp_nodes 
-    
-    
     bundle_date = datetime.now().strftime("%d/%m/%Y")
     if args.bundledate is not None:
         bundle_date = args.bundledate
-    elif args.bundlecreatedate != '':
+    elif args.bundlecreatedate != "":
         bundle_date = args.bundlecreatedate
-    else:
-        bundle_date = datetime.now().strftime("%d/%m/%Y")
-    print(f"Using bundle create date {bundle_date}")
 
-    
-
-    #bundle_date = datetime.now().strftime("%d/%m/%Y")
-    #if args.bundledate is None:
-    #    if args.bundlecreatedate == '':
-    #        bundle_date = datetime.now().strftime("%d/%m/%Y")
-    #        #bundle_date = '2020-01-31T00:01:01.000Z'
-    #    else:
-    #        bundle_date = args.bundlecreatedate
-    #        print(f"Using bundle create date {bundle_date}")
-
-
-
-    # Consolidate runtime options (avoid module-level globals)
     opts = Options(
         pretty=(pretty != 0),
         filesave=(file_save == 1),
         outputfile=outputFile,
         accountname=account_name,
         ticketnumber=ticket_number,
-        bundlepath=bundle_path,
+        bundlepath=args.bundlepath,
+        bundlefile=args.bundlefile,
         bundledate=bundle_date,
         debug=debug_level,
         extended_output=extended_output,
+        output_mode=output_mode,
+        output_format=output_format,
     )
 
-    # start duration timer....
-    #start_time = time.time()
+    try:
+        if opts.bundlefile:
+            with tempfile.TemporaryDirectory(prefix="sdnodesall-") as tmpdir:
+                temp_root = Path(tmpdir)
 
-    # Check to make sure this is a cluster bundle by trying to find ucp_nodes.txt
-    if not os.path.isfile(bundle_file):
-        print(f"❌ NOT valid cluster bundle, file '{bundle_file}' not found, exiting")
+                debug_print(
+                    1,
+                    debug_level,
+                    f"[info] using temporary extraction directory: {temp_root}"
+                )
+
+                bundle_root = prepare_bundle_input(opts, temp_root)
+                bundle_path = str(bundle_root)
+                opts_for_run = replace(opts, bundlepath=bundle_path)
+
+                bundle_file = bundle_root / ucp_nodes
+
+                bundle_mode = detect_bundle_mode(bundle_path, debug_level)
+
+                if bundle_mode == BUNDLE_MODE_CLUSTER:
+                    sd = load_cluster_nodes(str(bundle_file), debug_level)
+                elif bundle_mode == BUNDLE_MODE_SINGLE:
+                    sd = load_single_node(bundle_path, debug_level)
+                else:
+                    if not ticket_mode:
+                        print(f"❌ Unsupported or invalid support bundle: {bundle_root}", file=sys.stderr)
+                        print("Expected either ucp-nodes.txt or dsinfo/dsinfo.json", file=sys.stderr)
+                    return 2
+
+                process_nodes(sd, opts_for_run, bundle_mode)
+                return 0
+
+        else:
+            bundle_root = prepare_bundle_input(opts)
+            bundle_path = str(bundle_root)
+            opts_for_run = replace(opts, bundlepath=bundle_path)
+
+            bundle_file = bundle_root / ucp_nodes
+
+            if opts.bundlepath != "." and not ticket_mode:
+                print(f"Using Bundle Path: {bundle_root}")
+
+            bundle_mode = detect_bundle_mode(bundle_path, debug_level)
+
+            if bundle_mode == BUNDLE_MODE_CLUSTER:
+                sd = load_cluster_nodes(str(bundle_file), debug_level)
+            elif bundle_mode == BUNDLE_MODE_SINGLE:
+                sd = load_single_node(bundle_path, debug_level)
+            else:
+                if not ticket_mode:
+                    print(f"❌ Unsupported or invalid support bundle: {bundle_root}", file=sys.stderr)
+                    print("Expected either ucp-nodes.txt or dsinfo/dsinfo.json", file=sys.stderr)
+                return 2
+
+            process_nodes(sd, opts_for_run, bundle_mode)
+            return 0
+
+    except BundleLoadError as e:
+        if not ticket_mode:
+            print(f"❌ {e}", file=sys.stderr)
         return 2
-    else: # Process the full support bundle
-        getnodes(bundle_file, opts)
     
     # stop duration timer
     #end_time = time.time()
