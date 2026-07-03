@@ -31,18 +31,17 @@ Purpose:
 
   The tool is designed to operate as a standalone engineering utility with no external package dependencies, while also supporting structured output suitable for future Salesforce ingestion.
 
-  Primary audiences:
-    1. Engineers
+##  Primary audiences:
+>    1. Engineers
 >      - Human-readable terminal table
 >      - Optional debug output
 >      - Summary statistics
-
-    2. Ticket / Salesforce ingestion
+>
+>    2. Ticket / Salesforce ingestion
 >      - Clean semicolon-delimited output
 >      - Optional JSON output
 >      - No visual summary or console noise
-
-Major enhancements completed:
+## Major enhancements:
 
   Bundle support
   --------------
