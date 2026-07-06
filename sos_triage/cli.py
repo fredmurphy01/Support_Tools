@@ -106,8 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     a.add_argument(
         "--configs-dir",
-        default="./configs",
-        help="Directory containing sos-signatures.yaml (default: ./configs)",
+        default="",
+        help="Directory containing sos-signatures.yaml (default: ./tool-signatures)",
     )
     a.add_argument(
         "--config",
@@ -511,6 +511,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     sos_path = Path(args.sosreport)
     configs_dir = Path(args.configs_dir)
     cfg_path = Path(args.config)
+    print(f"CFG_PATH --->>>>> {cfg_path}")
     if not cfg_path.is_absolute() and not cfg_path.exists():
         cfg_path = configs_dir / cfg_path
 
