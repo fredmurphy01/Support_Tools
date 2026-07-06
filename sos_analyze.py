@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Launcher for package sos_triage
+
 from __future__ import annotations
 
 import sys
