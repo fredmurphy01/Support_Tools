@@ -9,9 +9,9 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 ## Available Tools
 
-| Tool                 | Purpose                                                       |
-| -------------------- | ------------------------------------------------------------- |
-| [SDNODES.PY](#sdnodespy)         | Cluster node inventory, validation, and hardware reporting    |
+| Tool                 | Purpose                                                       | Mode |
+| -------------------- | ------------------------------------------------------------- | |
+| [SDNODES.PY](#sdnodespy)         | Cluster node inventory, validation, and hardware reporting    | Standalone |
 | [PATTERNS_SEARCH.PY](#patterns_searchpy) | Multi-pattern scanning across support bundles                 |
 | [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | Sanitizes customer-sensitive information from support bundles |
 | [ETCD_ANALYSIS](#️etcd_analysis)      | Detects abnormal ETCD behavior and builds incident narratives |
