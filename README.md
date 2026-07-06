@@ -521,7 +521,7 @@ The file is called "etcd-signatures.yaml" located in the tool-signatures directo
 
 ### Example-1: Analyze bundle using typical etcd-signatures.yaml file with outputs going to tickets/12345678, which happens to be where the support bundle is located
 ```bash
-PYTHONPATH=tools python3 -m etcd_analysis analyze \
+python3 tools/etcd_analyze.py \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
     --config tools/tool-signatures/etcd-signatures.yaml \
     --output-dir tickets/123456787
@@ -529,7 +529,7 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 
 ### Example-2: Same as Example 1 but with a specific date (YYYY-MM-DD) and a +/- of two (2) days to analyze
 ```bash
-PYTHONPATH=tools python3 -m etcd_analysis analyze \
+python3 tools/etcd_analyze.py \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
     --config tools/tool-signatures/etcd-signatures.yaml \
     --output-dir tickets/123456787 \
@@ -539,7 +539,7 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 
 ### Example-3: Interactive mode to query individual leader nodes for individual analysis (Useful to query individual leaders and their data)
 ```bash
-PYTHONPATH=tools python3 -m etcd_analysis analyze \
+python3 tools/etcd_analyze.py \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
     --config tools/tool-signatures/etcd-signatures.yaml \
     --output-dir tickets/123456787 \
@@ -555,7 +555,7 @@ PYTHONPATH=tools python3 -m etcd_analysis analyze \
 > The effective range is ±hours around `--time`.
 > `0` means only that minute.
 ```bash
-PYTHONPATH=tools python3 -m etcd_analysis analyze \
+python3 tools/etcd_analyze.py \
     --bundle-path tickets/12345678/docker-support-20260303-19_51_11 \
     --config tools/tool-signatures/etcd-signatures.yaml \
     --output-dir tickets/123456787 \
