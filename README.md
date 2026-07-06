@@ -31,6 +31,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 >> - sos_triage/ <-- Package Implementation
 >> - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
 
+If you want the individual tools then fetch individually, however it is best to pull this repository in full.
 
 ---
 ## 🖥️
@@ -205,6 +206,8 @@ options:
 Searches support bundles for known patterns and produces summarized reports.
 While this tool was intended to work initially on MKE3 support bundles, it will work on any support bundle, or directory for that matter.
 Output is delivered to the console window and output files (see below) with a heatmap of findings at the end.
+
+If you want to add more to the patterns beyond what is built-in to the tool, you can pull/edit/change "tool-signatures/patterns.txt"
 
 ## Output Artifacts
 
@@ -444,6 +447,11 @@ For example:
 * classify lines into event types
 * extract timestamps + durations
 * assign duration-aware + storm-aware severity
+
+What to Pull (required):
+- etcd_analyze.py <-- Launcher
+- etcd_analysis/ <-- Package Implementation
+- tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
 
 ## Key Capabilities
 
