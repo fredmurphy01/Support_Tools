@@ -11,7 +11,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 | Tool                 | Purpose                                                       |
 | -------------------- | ------------------------------------------------------------- |
-| [SDNODES.PY](#sdnodespy)         | StandAlone Tool: Cluster node inventory, validation, and hardware reporting |
+| [SDNODES.PY](#sdnodespy)         | Cluster node inventory, validation, and hardware reporting |
 | [PATTERNS_SEARCH.PY](#patterns_searchpy) | Multi-pattern scanning across support bundles |
 | [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | Sanitizes customer-sensitive information from support bundles |
 | [ETCD_ANALYSIS](#️etcd_analysis)      | Detects abnormal ETCD behavior and builds incident narratives |
@@ -27,7 +27,7 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 > 4. etcd_analyze.py <-- Launcher
 >> - etcd_analysis/ <-- Package Implementation
 >> - tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
-> 5. sos_triage.py <-- Launcher
+> 5. sos_analyze.py <-- Launcher
 >> - sos_triage/ <-- Package Implementation
 >> - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
 
@@ -448,10 +448,6 @@ For example:
 * extract timestamps + durations
 * assign duration-aware + storm-aware severity
 
-What to Pull (required):
-- etcd_analyze.py <-- Launcher
-- etcd_analysis/ <-- Package Implementation
-- tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
 
 ## Key Capabilities
 
@@ -505,14 +501,6 @@ The file is called "etcd-signatures.yaml" located in the tool-signatures directo
     3 - A csv file for each leader found, e.g.
         3a - managerhost01_ucp-kv.log.events.csv
 
-
-- What is PYTHONPATH doing?
-    - Telling Python to treat the tools/ directory as a top-level module search path.
-    - Without this Python would not know where to find the "tools/sos_triage"
-    - We are saying here: The package root lives inside /tools
-
-    - What does the -m mean?
-        - This is very important and tells python to run a module as a script, which effectively is this entire package sos_triage.
 ```
 </details>
 
@@ -1401,28 +1389,6 @@ For example, analytics regarding one such item:
 * Derive findings from structured signal
 * Render narrative from findings and timeline
 
-
-
-## Operating Profiles
-| Profile | Name | Purpose |
-|----------|----------|----------|
-| A | Quick Triage | Default |
-| B | Deep Analysis | Journal |
-| C | Forensics | Full |
-
-### Profile A — Quick Triage
-
-Most common support-engineer workflow; likely 80–90% of runs.
-
-### Profile B — Deep Analysis
-
-No guardrails or limits; used for deeper inspection.
-
-### Profile C — One-shot Forensics
-
-Used for unusual, complex, or weird bundles.
-
-
 ---
 
 <details>
@@ -1493,73 +1459,40 @@ When reviewing output:
 4. Trace to `events.jsonl` if deeper context is required
 5. Always check `meta.json` for limits and severity filtering
 
-```text
-- What is PYTHONPATH doing?
-    - Telling Python to treat the tools/ directory as a top-level module search path.
-    - Without this Python would not know where to find the "tools/sos_triage"
-    - We are saying here: The package root lives inside /tools
-
-    - What does the -m mean?
-        - This is very important and tells python to run a module as a script, which effectively is this entire package sos_triage.
-```
 </details>
 
 <details>
 <summary>SOS_TRIAGE Examples</summary>
 
-| Profile   | Name               | Intended Use                                                                 |
-| --------- | ------------------ | ---------------------------------------------------------------------------- |
-| Profile A | Quick Triage       | DEFAULT - Most common support-engineer workflow; likely 80–90% of runs       |
+EXAMPLE 1:
+Inputs:
+* <1st Parameter> <-- Full path to sosreport file.
+* --verbose <-- Displays outputs to screen.
+* --outdir  <-- Path where output files will be placed.
+* --config  <-- Path where to find the signatures file.
 ```bash
-PYTHONPATH=tools python3 -m sos_triage analyze \
-    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
-    --max-bytes 8000000 \
-    --max-events 2000 \
-    --verbose \
-    --outdir tickets/12345678/sosanalysis \
-    --configs-dir tools/tool-signatures \
-    --cleanup-extracted
+python3 tools/sos_analyze.py \
+  tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
+  --verbose \
+  --outdir tickets/12345678/sosanalysis \ 
+  --config tool-signatures/sos-signatures.yaml
+
 ```
 
-| Profile   | Name               | Intended Use                                                                 |
-| --------- | ------------------ | ---------------------------------------------------------------------------- |
-| Profile B | Deep Analysis      | --extract-mode JOURNAL - No guardrails or limits; used for deeper inspection |
+EXAMPLE 2:
+Inputs:
+* <1st Parameter> <-- Full path to sosreport file.
+* --verbose <-- Displays outputs to screen.
+* --outdir  <-- Path where output files will be placed.
+* --config  <-- Path where to find the signatures file.
+* --cleanup-extracted <-- Remove the extracted sosreport.
 ```bash
-PYTHONPATH=tools python3 -m sos_triage analyze \
-    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
-    --extract-mode journal \
-    --max-bytes 8000000 \
-    --max-events 2000 \
-    --verbose \
-    --outdir tickets/12345678/sosanalysis \
-    --configs-dir tools/tool-signatures \
-    --cleanup-extracted
-```
-
-| Profile   | Name               | Intended Use                                                                 |
-| --------- | ------------------ | ---------------------------------------------------------------------------- |
-| Profile C | One-shot Forensics | --extract-mode FULL - Used for unusual, complex, or weird bundles            |
-```bash
-PYTHONPATH=tools python3 -m sos_triage analyze \
-    tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
-    --extract-mode full \
-    --max-bytes 8000000 \
-    --max-events 2000 \
-    --verbose \
-    --outdir tickets/12345678/sosanalysis \
-    --configs-dir tools/tool-signatures \
-    --cleanup-extracted
-```
-
-
-## Keeping the Extracted Sosreport
-
-By default, the example above removes the extracted sosreport after analysis.
-
-To keep the extracted sosreport, remove this argument:
-
-```bash
---cleanup-extracted
+python3 tools/sos_analyze.py \
+  tickets/12345678/sosreport-sl73fbrapq106-2026-03-05-uileqsh.tar.xz \
+  --verbose \
+  --outdir tickets/12345678/sosanalysis \ 
+  --config tool-signatures/sos-signatures.yaml
+  --cleanup-extracted
 ```
 </details>
 
