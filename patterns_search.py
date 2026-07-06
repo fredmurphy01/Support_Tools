@@ -14,6 +14,7 @@ Key features:
 - Optional date filter via --date and +/- window via --date-window-days
 """
 
+
 from __future__ import annotations
 
 import argparse
