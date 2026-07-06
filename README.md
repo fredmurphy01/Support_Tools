@@ -9,13 +9,28 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 ## Available Tools
 
-| Tool                 | Purpose                                                       | x |
-| -------------------- | ------------------------------------------------------------- | x |
-| [SDNODES.PY](#sdnodespy)         | Cluster node inventory, validation, and hardware reporting    | x |
-| [PATTERNS_SEARCH.PY](#patterns_searchpy) | Multi-pattern scanning across support bundles                 | x |
-| [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | Sanitizes customer-sensitive information from support bundles | x |
-| [ETCD_ANALYSIS](#️etcd_analysis)      | Detects abnormal ETCD behavior and builds incident narratives | x |
-| [SOS_TRIAGE](#sos_triage)         | Deterministic sosreport analysis with structured RCA outputs  | x |
+| Tool                 | Purpose                                                       |
+| -------------------- | ------------------------------------------------------------- |
+| [SDNODES.PY](#sdnodespy)         | Cluster node inventory, validation, and hardware reporting    |
+| [PATTERNS_SEARCH.PY](#patterns_searchpy) | Multi-pattern scanning across support bundles                 |
+| [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | Sanitizes customer-sensitive information from support bundles |
+| [ETCD_ANALYSIS](#️etcd_analysis)      | Detects abnormal ETCD behavior and builds incident narratives |
+| [SOS_TRIAGE](#sos_triage)         | Deterministic sosreport analysis with structured RCA outputs  |
+
+## Standalone Tools:
+> 1. sdnodes.py
+> 2. bundle_sanitize.py
+> 3. patterns_search.py
+> - Can use tool-signatures/patterns.txt
+
+## Package-based Tools:
+> 1. etcd_analyze.py <-- Launcher
+> - etcd_analysis/ <-- Package Implementation
+> - tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
+> 2. sos_triage.py <-- Launcher
+> - sos_triage/ <-- Package Implementation
+> - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
+> - Uses the 
 
 ---
 ## 🖥️
