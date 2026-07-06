@@ -57,8 +57,9 @@ Purpose:
 >      - Clean semicolon-delimited output
 >      - Optional JSON output
 >      - No visual summary or console noise
-## Major enhancements:
 
+<details>
+<summary>Major Enhancements</summary>
   Bundle support
   --------------
     1. Added support for both cluster-wide and single-node support bundles.
@@ -86,6 +87,8 @@ Purpose:
 >              Structured machine-readable output.
 
 > Typical output includes cluster identifiers, node roles, engine versions, Kubernetes status, operating system details, hardware inventory, node health, and collection metadata.
+</details>
+
 
 <details>
 <summary>Example Output</summary>
