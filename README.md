@@ -11,23 +11,23 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 
 | Tool                 | Purpose                                                       |
 | -------------------- | ------------------------------------------------------------- |
-| [SDNODES.PY](#sdnodespy)         | StandAlone Tool: Cluster node inventory, validation, and hardware reporting    |
-| [PATTERNS_SEARCH.PY](#patterns_searchpy) | StandAlone Tool: Multi-pattern scanning across support bundles       * Can make use of tool-signatures/patterns.txt to add more patterns          |
-| [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | StandAlone Tool: Sanitizes customer-sensitive information from support bundles |
-| [ETCD_ANALYSIS](#️etcd_analysis)      | Package Tool: Detects abnormal ETCD behavior and builds incident narratives    * etcd_analysis/ <-- Package Implementation  * tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures|
+| [SDNODES.PY](#sdnodespy)         | StandAlone Tool: Cluster node inventory, validation, and hardware reporting |
+| [PATTERNS_SEARCH.PY](#patterns_searchpy) | Multi-pattern scanning across support bundles |
+| [BUNDLE_SANITIZE.PY](#bundle_sanitizepy) | Sanitizes customer-sensitive information from support bundles |
+| [ETCD_ANALYSIS](#️etcd_analysis)      | Detects abnormal ETCD behavior and builds incident narratives |
 | [SOS_TRIAGE](#sos_triage)         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ## Standalone Tools:
-### 1. sdnodes.py
-### 2. bundle_sanitize.py
-### 3. patterns_search.py
+> - 1. sdnodes.py
+> - 2. bundle_sanitize.py
+> - 3. patterns_search.py
 > - Can use tool-signatures/patterns.txt
 
 ## Package-based Tools:
-### 1. etcd_analyze.py <-- Launcher
+> - 4. etcd_analyze.py <-- Launcher
 > - etcd_analysis/ <-- Package Implementation
-> - tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
-> 2. sos_triage.py <-- Launcher
+>> - tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
+> 5. sos_triage.py <-- Launcher
 > - sos_triage/ <-- Package Implementation
 > - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
 > - Uses the 
