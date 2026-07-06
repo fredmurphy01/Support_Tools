@@ -18,19 +18,19 @@ A collection of support-engineering utilities for analyzing support bundles, sos
 | [SOS_TRIAGE](#sos_triage)         | Deterministic sosreport analysis with structured RCA outputs  |
 
 ## Standalone Tools:
-> - 1. sdnodes.py
-> - 2. bundle_sanitize.py
-> - 3. patterns_search.py
-> - Can use tool-signatures/patterns.txt
+- 1. sdnodes.py
+- 2. bundle_sanitize.py
+- 3. patterns_search.py
+>> - Can use tool-signatures/patterns.txt
 
 ## Package-based Tools:
-> - 4. etcd_analyze.py <-- Launcher
-> - etcd_analysis/ <-- Package Implementation
+- 4. etcd_analyze.py <-- Launcher
+>> - etcd_analysis/ <-- Package Implementation
 >> - tools-signatures/etcd-signatures.yaml <-- etcd analysis patterns/signatures
-> 5. sos_triage.py <-- Launcher
-> - sos_triage/ <-- Package Implementation
-> - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
-> - Uses the 
+- 5. sos_triage.py <-- Launcher
+>> - sos_triage/ <-- Package Implementation
+>> - tools-signatures/sos-signatures.yaml <-- sos analysis patterns/signatures
+
 
 ---
 ## 🖥️
