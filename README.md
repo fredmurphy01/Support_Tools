@@ -120,10 +120,15 @@ Unique OS kernels discovered [2]
 <details>
 <summary>SDNODES Examples</summary>
 
-### Example-1: Basic output (default is pretty)
+### Example-1: Basic output (default is pretty) <-- Pointing to an extracted bundle. Can be cluster bundle or single node bundle.
 ```bash
 python3 tools/sdnodes.py \
     --bundlepath tickets/12345678/docker-support-20260303-19_51_11
+```
+### Example-1a: Basic output pointing to an unextracted bundle. Can be cluster bundle or single node bundle.
+```bash
+python3 tools/sdnodes.py \
+    --bundlefile tickets/12345678/docker-support-20260303-19_51_11/docker-support-1234567-20260622-17_59_16.zip
 ```
 
 ### Example-2: Extended output showing hardware (default is pretty)
