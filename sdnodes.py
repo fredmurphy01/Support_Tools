@@ -93,6 +93,12 @@
 #          json
 #              Structured machine-readable output.
 #
+#   Archive root detection
+#   ----------------------
+#  16. v1.26 separates exact bundle-root detection from node-level
+#      dsinfo evidence detection, preventing cluster archives from
+#      being rejected because nested node directories contain dsinfo.
+#
 # CLI options:
 #
 #   --pretty {0,1}
@@ -207,13 +213,57 @@ ucp_nodes = 'ucp-nodes.txt'
 BUNDLE_MODE_CLUSTER = "cluster"
 BUNDLE_MODE_SINGLE = "single"
 BUNDLE_MODE_UNKNOWN = "unknown"
-VERSION = "1.25"
+VERSION = "1.27"
 TOOL_NAME = "SDNODES"
 
 #------------------------------------------------------------
 # Purpose:
-#   Detect whether the supplied support bundle is a cluster-wide
-#   bundle, single-node bundle, or an unsupported layout.
+#   Return True when the supplied path is exactly a cluster-wide
+#   support bundle root.
+#
+# Invariant:
+#   A directory is a bundle root only if sdnodes can be pointed
+#   directly at that directory and process it.
+#------------------------------------------------------------
+def is_cluster_bundle_root(path: Path) -> bool:
+    return (path / "ucp-nodes.txt").is_file()
+
+#------------------------------------------------------------
+# Purpose:
+#   Return True when the supplied path is exactly a single-node
+#   support bundle root.
+#
+# A true single-node root must contain the root-level dsinfo
+# directory with enough evidence for load_single_node() and the
+# existing parsers to operate predictably.
+#------------------------------------------------------------
+def is_single_node_bundle_root(path: Path) -> bool:
+    return (
+        (path / "dsinfo" / "dsinfo.json").is_file()
+        and (path / "dsinfo" / "dsinfo.txt").is_file()
+        and (path / "dsinfo" / "inspect").is_dir()
+    )
+
+#------------------------------------------------------------
+# Purpose:
+#   Return True when a path contains node-level dsinfo evidence.
+#
+# This is intentionally not the same as being a bundle root.
+# Cluster bundles contain many node directories with dsinfo evidence;
+# those directories are evidence inside the cluster bundle, not
+# independent archive roots.
+#------------------------------------------------------------
+def contains_node_dsinfo_evidence(path: Path) -> bool:
+    return (
+        (path / "dsinfo" / "dsinfo.json").is_file()
+        or (path / "dsinfo" / "dsinfo.txt").is_file()
+        or (path / "dsinfo" / "inspect").is_dir()
+    )
+
+#------------------------------------------------------------
+# Purpose:
+#   Detect whether the supplied path is exactly a supported
+#   bundle root: cluster-wide, single-node, or unsupported.
 #
 # Returns:
 #   BUNDLE_MODE_CLUSTER
@@ -227,30 +277,18 @@ def detect_bundle_mode(bundle_path: str, debug_level: int = 0) -> str:
         debug_print(1, debug_level, f"[warn] bundle path does not exist or is not a directory: {root}")
         return BUNDLE_MODE_UNKNOWN
 
-    has_ucp_nodes = (root / "ucp-nodes.txt").is_file()
-    has_root_dsinfo_json = (root / "dsinfo" / "dsinfo.json").is_file()
-    has_root_dsinfo_txt = (root / "dsinfo" / "dsinfo.txt").is_file()
-    has_root_inspect = (root / "dsinfo" / "inspect").is_dir()
-
-    if has_ucp_nodes:
-        debug_print(2, debug_level, f"[info] detected cluster bundle: found {root / 'ucp-nodes.txt'}")
+    if is_cluster_bundle_root(root):
+        debug_print(2, debug_level, f"[info] detected cluster bundle root: found {root / 'ucp-nodes.txt'}")
         return BUNDLE_MODE_CLUSTER
 
-    single_score = sum([
-        has_root_dsinfo_json,
-        has_root_dsinfo_txt,
-        has_root_inspect,
-    ])
-
-    if has_root_dsinfo_json and single_score >= 2:
-        debug_print(2, debug_level, f"[INFO] detected single-node bundle: dsinfo evidence score={single_score}/3")
+    if is_single_node_bundle_root(root):
+        debug_print(2, debug_level, f"[info] detected single-node bundle root: {root}")
         return BUNDLE_MODE_SINGLE
 
-    if has_root_dsinfo_json:
-        debug_print(1, debug_level, f"[WARN] dsinfo.json found but single-node evidence is weak: score={single_score}/3")
-        return BUNDLE_MODE_SINGLE
+    if contains_node_dsinfo_evidence(root):
+        debug_print(2, debug_level, f"[debug] dsinfo evidence found, but path is not a complete bundle root: {root}")
 
-    debug_print(2, debug_level, f"[WARN] unsupported bundle layout: {root}")
+    debug_print(2, debug_level, f"[warn] unsupported bundle layout: {root}")
     return BUNDLE_MODE_UNKNOWN
 
 #------------------------------------------------------------
@@ -473,32 +511,56 @@ def find_extracted_bundle_root(extract_root: Path, debug_level: int = 0) -> Path
         if path.is_dir():
             candidate_roots.append(path)
 
-    valid_roots = []
+    cluster_roots = []
+    single_roots = []
 
     for candidate in candidate_roots:
         mode = detect_bundle_mode(str(candidate), debug_level)
 
-        if mode in (BUNDLE_MODE_CLUSTER, BUNDLE_MODE_SINGLE):
-            valid_roots.append((candidate, mode))
+        if mode == BUNDLE_MODE_CLUSTER:
+            cluster_roots.append(candidate)
+        elif mode == BUNDLE_MODE_SINGLE:
+            single_roots.append(candidate)
 
-    if not valid_roots:
+    debug_print(
+        2,
+        debug_level,
+        f"[debug] extracted bundle candidates: cluster={len(cluster_roots)} single={len(single_roots)}"
+    )
+
+    if not cluster_roots and not single_roots:
         raise BundleLoadError(
             f"No supported bundle root found after archive extraction: {extract_root}"
         )
 
-    if len(valid_roots) > 1:
-        root_list = ", ".join(str(path) for path, _mode in valid_roots)
-        raise BundleLoadError(
-            f"Multiple supported bundle roots found after archive extraction; refusing to choose arbitrarily: {root_list}"
-        )
+    # Cluster-wide bundles win over nested node-level dsinfo evidence.
+    # In a cluster archive, per-node directories may look like single-node
+    # evidence, but they are not the archive root we should process.
+    if cluster_roots:
+        cluster_roots.sort(key=lambda p: len(p.relative_to(extract_root).parts))
+        bundle_root = cluster_roots[0]
 
-    bundle_root, mode = valid_roots[0]
-    debug_print(
-        1,
-        debug_level,
-        f"[info] detected extracted bundle root: {bundle_root} ({mode})"
+        debug_print(
+            1,
+            debug_level,
+            f"[info] detected extracted cluster bundle root: {bundle_root}"
+        )
+        return bundle_root
+
+    if len(single_roots) == 1:
+        bundle_root = single_roots[0]
+
+        debug_print(
+            1,
+            debug_level,
+            f"[info] detected extracted single-node bundle root: {bundle_root}"
+        )
+        return bundle_root
+
+    root_list = ", ".join(str(path) for path in single_roots)
+    raise BundleLoadError(
+        f"Multiple single-node bundle roots found after archive extraction; refusing to choose arbitrarily: {root_list}"
     )
-    return bundle_root
 #------------------------------------------------------------
 # Purpose:
 #   Prepare the supplied support bundle input for processing.
@@ -1035,47 +1097,75 @@ def load_single_node(bundle_path: str, debug_level: int = 0) -> list:
     dsinfo = safe_read_json_file(dsinfo_json_path, debug_level, required=True, default={})
     if not isinstance(dsinfo, dict):
         raise BundleLoadError(f"Single-node dsinfo.json is not a JSON object: {dsinfo_json_path}")
-    
+
+    def as_dict(value, label: str) -> dict:
+        if isinstance(value, dict):
+            return value
+        if value not in (None, ""):
+            debug_print(1, debug_level, f"[warn] single-node dsinfo field {label} is {type(value).__name__}; expected object")
+        return {}
+
+    def first_hostname(value) -> str:
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+            return "single-node"
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if value not in (None, ""):
+            debug_print(1, debug_level, f"[warn] single-node dsinfo field hostname is {type(value).__name__}; expected list or string")
+        return "single-node"
+
     node_id = "single-node"
     is_manager = False
     node_ip = "0.0.0.0"
-    cluster_id ="0000000000"
+    cluster_id = "0000000000"
 
     dsinfo_txt_path = root / "dsinfo" / "dsinfo.txt"
-    
-    if dsinfo_txt_path.is_file():
-        with dsinfo_txt_path.open("r", encoding="utf-8", errors="ignore") as r:
-            for line in r:
-                if "NodeID:" in line:
-                    node_id = line.split("NodeID:", 1)[1].strip()
-                
-                if "Is Manager:" in line:
-                    is_manager = line.split("Is Manager:", 1)[1].strip().lower() == "true"
 
-                if "Node Address:" in line:
-                    node_ip = line.split("Node Address:", 1)[1].strip()
-                
-                if "com.docker.ucp.InstanceID" in line:
-                    match = re.search(r'"com\.docker\.ucp\.InstanceID"\s*:\s*"([^"]+)"', line)
-                    if match:
-                        cluster_id = match.group(1)
+    try:
+        if dsinfo_txt_path.is_file():
+            with dsinfo_txt_path.open("r", encoding="utf-8", errors="ignore") as r:
+                for line in r:
+                    if "NodeID:" in line:
+                        parsed = line.split("NodeID:", 1)[1].strip()
+                        if parsed:
+                            node_id = parsed
+
+                    if "Is Manager:" in line:
+                        is_manager = line.split("Is Manager:", 1)[1].strip().lower() == "true"
+
+                    if "Node Address:" in line:
+                        parsed = line.split("Node Address:", 1)[1].strip()
+                        if parsed:
+                            node_ip = parsed
+
+                    if "com.docker.ucp.InstanceID" in line:
+                        match = re.search(r'"com\.docker\.ucp\.InstanceID"\s*:\s*"([^"]+)"', line)
+                        if match:
+                            cluster_id = match.group(1)
+    except Exception as e:
+        debug_print(1, debug_level, f"[warn] single-node dsinfo.txt could not be fully read: {dsinfo_txt_path}: {e}")
 
     mke_version = "?.?.??"
     mke_found = getddcver(str(root / "dsinfo" / "inspect"), "ucp-proxy.txt", "IMAGE_VERSION", debug_level)
     if mke_found != "-":
         mke_version = mke_found
 
+    docker_info = as_dict(dsinfo.get("docker_info", {}), "docker_info")
+    docker_version = as_dict(dsinfo.get("docker_version", {}), "docker_version")
 
-    docker_info = dsinfo.get("docker_info", {})
-    docker_version = dsinfo.get("docker_version", {})
+    hostname = first_hostname(dsinfo.get("hostname", []))
 
-    hostname_list = dsinfo.get("hostname", [])
-    hostname = hostname_list[0] if hostname_list else "single-node"
-
-    server_version = docker_version.get("Server", {})
+    server_version = as_dict(docker_version.get("Server", {}), "docker_version.Server")
     engine_version = server_version.get("Version", "?.?.????")
+    if not isinstance(engine_version, str) or not engine_version.strip():
+        engine_version = "?.?.????"
 
     arch = docker_info.get("Architecture", "unknown")
+    if not isinstance(arch, str) or not arch.strip():
+        arch = "unknown"
 
     ncpu = safe_int(docker_info.get("NCPU", 0), 0)
     mem_total = safe_int(docker_info.get("MemTotal", 0), 0)
@@ -1540,10 +1630,13 @@ def render_table(result: NodeRowsResult, opts: Options) -> None:
         widths = [len(c) for c in result.header_cols]
 
     if file_save:
-        with open(outputFile, "w") as outfile:
-            row_print2(result.header_cols, widths, outfile=outfile, pretty=pretty)
-            for row in result.rows:
-                row_print2(row, widths, outfile=outfile, pretty=pretty)
+        try:
+            with open(outputFile, "w", encoding="utf-8") as outfile:
+                row_print2(result.header_cols, widths, outfile=outfile, pretty=pretty)
+                for row in result.rows:
+                    row_print2(row, widths, outfile=outfile, pretty=pretty)
+        except Exception as e:
+            raise BundleLoadError(f"Failed to write output file {outputFile}: {e}") from e
     else:
         row_print2(result.header_cols, widths, outfile=None, pretty=pretty)
         for row in result.rows:
@@ -1606,8 +1699,11 @@ def render_json(result: NodeRowsResult, opts: Options) -> None:
     print(json_text, flush=True)
 
     if opts.filesave:
-        with open(opts.outputfile, "w", encoding="utf-8") as outfile:
-            outfile.write(json_text + "\n")
+        try:
+            with open(opts.outputfile, "w", encoding="utf-8") as outfile:
+                outfile.write(json_text + "\n")
+        except Exception as e:
+            raise BundleLoadError(f"Failed to write JSON output file {opts.outputfile}: {e}") from e
 
 #------------------------------------------------------------
 # Purpose:
@@ -1953,6 +2049,13 @@ def cli_main() -> int:
         if not ticket_mode:
             print(f"❌ {e}", file=sys.stderr)
         return 2
+
+    except Exception as e:
+        if not ticket_mode:
+            print(f"❌ Unexpected sdnodes failure: {e}", file=sys.stderr)
+        else:
+            debug_print(1, debug_level, f"[error] Unexpected sdnodes failure: {e}")
+        return 1
     
     # stop duration timer
     #end_time = time.time()
